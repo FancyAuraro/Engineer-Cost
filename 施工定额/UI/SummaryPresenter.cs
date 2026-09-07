@@ -20,14 +20,21 @@ namespace 施工定额.UI
             _calcService = calcService ?? throw new ArgumentNullException(nameof(calcService));
         }
 
+        /// <summary>
+        /// 按单位工程筛选。分部分项 / 措施 / 其他项目均只统计当前单位工程。
+        /// </summary>
         private IEnumerable<Qingdan> Scope(string? unitProjectCode)
         {
             if (string.IsNullOrWhiteSpace(unitProjectCode))
                 return _qingdanList;
             var u = unitProjectCode.Trim();
             return _qingdanList.Where(q =>
-                QingdanCategory.IsOther(q.项目类别)
-                || (string.IsNullOrWhiteSpace(q.单位工程编码) ? UnitProject.DefaultCode : q.单位工程编码) == u);
+            {
+                var code = string.IsNullOrWhiteSpace(q.单位工程编码)
+                    ? UnitProject.DefaultCode
+                    : q.单位工程编码.Trim();
+                return code == u;
+            });
         }
 
         public object GetCostSummaryData(string? unitProjectCode = null)
