@@ -78,18 +78,16 @@ namespace 施工定额
 
         public Form1(IQingdanRepository repo, ICostCalculationService calcService)
         {
-            _repo = repo ?? throw new ArgumentNullException(nameof(repo));
-            _calcService = calcService ?? throw new ArgumentNullException(nameof(calcService));
             InitializeComponent();
-            EnsureMeasureTab();
-            ApplyToolbarIcons();
             ApplyUiFont();
             ApplyResponsiveLayout();
-            Shown += OnFirstShownApplySplitters;
+            EnsureMeasureTab();
+            ApplyToolbarIcons();
+            Text = "施工定额";
 
+            _repo = repo ?? throw new ArgumentNullException(nameof(repo));
+            _calcService = calcService ?? throw new ArgumentNullException(nameof(calcService));
             _selection = new SelectionState();
-            _selection.QingdanChanged += OnQingdanSelectionChanged;
-            _selection.DingeChanged += OnDingeSelectionChanged;
 
             _qingdanPresenter = new QingdanPresenter(_repo, _calcService, _allQingdan, UpdateDisplay);
             _summaryPresenter = new SummaryPresenter(_allQingdan, _calcService);
@@ -100,7 +98,9 @@ namespace 施工定额
             dataGridView1.Tag = QingdanCategory.分部分项;
             dataGridView1.ContextMenuStrip = _menuBuilder.BuildQingdanMenu(dataGridView1, QingdanCategory.分部分项);
 
-            EnsureMeasureTab();
+            _selection.QingdanSelectionChanged += OnQingdanSelectionChanged;
+            _selection.DingeSelectionChanged += OnDingeSelectionChanged;
+
             EnsureSettingsMenu();
             EnsureHelpMenu();
             WirePlaceholderMenus();
@@ -125,35 +125,38 @@ namespace 施工定额
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Horizontal,
-                Name = "measureSplit"
+                SplitterWidth = 5,
+                Panel1MinSize = 0,
+                Panel2MinSize = 0
             };
 
             dataGridView_measure = new FeatureDataGridView
             {
                 Dock = DockStyle.Fill,
                 Name = "dataGridView_measure",
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
-                Tag = QingdanCategory.措施项目
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
             };
+            dataGridView_measure.CellClick += dataGridView_measure_CellClick;
+            dataGridView_measure.CellDoubleClick += dataGridView_measure_CellDoubleClick;
+            dataGridView_measure.CellEndEdit += dataGridView_measure_CellEndEdit;
+
             DataGridView_measure_dinge = new DataGridView
             {
                 Dock = DockStyle.Fill,
                 Name = "DataGridView_measure_dinge",
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
             };
+            DataGridView_measure_dinge.CellClick += DataGridView_measure_dinge_CellClick;
+            DataGridView_measure_dinge.CellValueChanged += DataGridView_measure_dinge_CellValueChanged;
 
             measureSplit.Panel1.Controls.Add(dataGridView_measure);
             measureSplit.Panel2.Controls.Add(DataGridView_measure_dinge);
             tabPage措施.Controls.Add(measureSplit);
 
-            int insertAt = 0;
+            var insertAt = 1;
             for (int i = 0; i < tabControl1.TabPages.Count; i++)
             {
-                if (tabControl1.TabPages[i].Name == "tabPage分部分项" || tabControl1.TabPages[i].Text.Contains("分部分项"))
+                if (tabControl1.TabPages[i].Name == "tabPage1")
                 {
                     insertAt = i + 1;
                     break;
@@ -161,12 +164,14 @@ namespace 施工定额
             }
             tabControl1.TabPages.Insert(insertAt, tabPage措施);
 
-            dataGridView_measure.ContextMenuStrip = _menuBuilder.BuildQingdanMenu(dataGridView_measure, QingdanCategory.措施项目);
-            dataGridView_measure.CellClick += dataGridView_measure_CellClick;
-            dataGridView_measure.CellDoubleClick += dataGridView_measure_CellDoubleClick;
-            dataGridView_measure.CellEndEdit += dataGridView_measure_CellEndEdit;
-            DataGridView_measure_dinge.CellClick += DataGridView_measure_dinge_CellClick;
-            DataGridView_measure_dinge.CellValueChanged += DataGridView_measure_dinge_CellValueChanged;
+            Shown += (_, _) =>
+            {
+                if (measureSplit != null && measureSplit.Height > 80)
+                {
+                    try { measureSplit.SplitterDistance = (int)(measureSplit.Height * 0.55); }
+                    catch { }
+                }
+            };
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -178,77 +183,61 @@ namespace 施工定额
         private void InitializeGridColumns()
         {
             GridManager.BindOnce(dataGridView1, myMemoryQingdanBindingList, GridColumns.Qingdan);
-            dataGridView1.CellClick += dataGridView1_CellClick;
-            dataGridView1.CellDoubleClick += dataGridView1_CellDoubleClick;
-            dataGridView1.CellContentClick += dataGridView1_CellContentClick;
-            dataGridView1.CellEndEdit += dataGridView1_CellEndEdit;
-
+            dataGridView1.Columns.Add(new DataGridViewButtonColumn
+            {
+                Name = "btnViewImage", HeaderText = "图片", Text = "查看",
+                UseColumnTextForButtonValue = true, Width = 60
+            });
+            GridLayoutStore.Attach(dataGridView1);
             GridManager.BindOnce(DataGridView_dinge, _dingeBindingList, GridColumns.Dinge);
             GridManager.BindOnce(dataGridView2, _xhlBindingList, GridColumns.Xiaohaoliang);
-
             if (dataGridView_measure != null)
+            {
                 GridManager.BindOnce(dataGridView_measure, _measureQingdanList, GridColumns.MeasureQingdan);
+                dataGridView_measure.Tag = QingdanCategory.措施项目;
+                dataGridView_measure.ContextMenuStrip = _menuBuilder.BuildQingdanMenu(dataGridView_measure, QingdanCategory.措施项目);
+            }
             if (DataGridView_measure_dinge != null)
                 GridManager.BindOnce(DataGridView_measure_dinge, _measureDingeBindingList, GridColumns.Dinge);
-
-            DataGridView_dinge.CellClick += DataGridView_dinge_CellClick;
-            DataGridView_dinge.CellValueChanged += DataGridView_dinge_CellValueChanged;
-            dataGridView2.CellValueChanged += dataGridView2_CellValueChanged;
         }
 
         public void UpdateDisplay(DisplayType type)
         {
             switch (type)
             {
-                case DisplayType.Qingdan:
-                    RebuildCategoryViews();
-                    break;
+                case DisplayType.Qingdan: break;
                 case DisplayType.Dinge:
                     {
-                        _dingeBindingList.RaiseListChangedEvents = false;
-                        _measureDingeBindingList.RaiseListChangedEvents = false;
+                        _suppressGridEvents = true;
                         try
                         {
-                            _dingeBindingList.Clear();
-                            _measureDingeBindingList.Clear();
-                            var qd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-                            if (qd != null)
+                            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
+                            var list = currentQd?.定额列表 ?? Enumerable.Empty<Dinge>();
+                            if (currentQd != null && QingdanCategory.IsMeasure(currentQd.项目类别))
                             {
-                                var target = QingdanCategory.IsMeasure(qd.项目类别)
-                                    ? _measureDingeBindingList
-                                    : _dingeBindingList;
-                                foreach (var d in qd.定额列表)
-                                    target.Add(d);
+                                _measureDingeBindingList.ReplaceAll(list);
+                                _dingeBindingList.ReplaceAll(Enumerable.Empty<Dinge>());
+                            }
+                            else
+                            {
+                                _dingeBindingList.ReplaceAll(list);
+                                _measureDingeBindingList.ReplaceAll(Enumerable.Empty<Dinge>());
                             }
                         }
-                        finally
-                        {
-                            _dingeBindingList.RaiseListChangedEvents = true;
-                            _measureDingeBindingList.RaiseListChangedEvents = true;
-                            _dingeBindingList.ResetBindings();
-                            _measureDingeBindingList.ResetBindings();
-                        }
+                        finally { _suppressGridEvents = false; }
                         break;
                     }
                 case DisplayType.Xiaohaoliang:
                     {
-                        _xhlBindingList.RaiseListChangedEvents = false;
+                        _suppressGridEvents = true;
                         try
                         {
-                            _xhlBindingList.Clear();
-                            var qd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-                            var dg = qd?.定额列表.FirstOrDefault(d => d.ID号 == _selection.SelectedDingeId);
-                            if (dg != null)
-                            {
-                                foreach (var x in dg.消耗量列表)
-                                    _xhlBindingList.Add(x);
-                            }
+                            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
+                            var currentDg = currentQd?.定额列表.FirstOrDefault(
+                                d => d.定额编码 == _selection.SelectedDingeCode && d.ID号 == _selection.SelectedDingeID);
+                            _xhlBindingList.ReplaceAll(currentDg?.消耗量列表 ?? Enumerable.Empty<Xiaohaoliang>());
                         }
-                        finally
-                        {
-                            _xhlBindingList.RaiseListChangedEvents = true;
-                            _xhlBindingList.ResetBindings();
-                        }
+                        finally { _suppressGridEvents = false; }
                         break;
                     }
             }
