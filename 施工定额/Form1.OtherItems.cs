@@ -78,46 +78,44 @@ namespace 施工定额
             if (dataGridView_other == null) return;
             if (dataGridView_other.DataSource != null) return;
 
-            GridManager.BindOnce(dataGridView_other, _otherItems);
-            dataGridView_other.AutoGenerateColumns = false;
-            dataGridView_other.Columns.Clear();
-            dataGridView_other.Columns.Add(new DataGridViewTextBoxColumn
+            GridManager.BindOnce(dataGridView_other, _otherItems, new List<ColumnConfig>
             {
-                Name = "名称",
-                DataPropertyName = "名称",
-                HeaderText = "名称",
-                Width = 200
+                new() { FieldName = "名称", HeaderText = "名称", Width = 180, ReadOnly = false },
+                new() { FieldName = "金额", HeaderText = "金额", Width = 120, ReadOnly = false,
+                        Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
             });
-            dataGridView_other.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "金额",
-                DataPropertyName = "金额",
-                HeaderText = "金额",
-                Width = 120
-            });
-
             dataGridView_other.CellBeginEdit += dataGridView_other_CellBeginEdit;
             dataGridView_other.CellEndEdit += dataGridView_other_CellEndEdit;
 
-            var menu = new ContextMenuStrip();
-            menu.Items.Add("新增", null, (_, _) => AddOtherItem());
-            menu.Items.Add("删除", null, (_, _) => DeleteOtherItem());
-            UiTheme.ApplyContextMenu(menu);
+            var menu = new ContextMenuStrip { Font = UiTheme.Font };
+            var add = new ToolStripMenuItem("新增条目");
+            add.Click += (_, _) => AddOtherItem();
+            var del = new ToolStripMenuItem("删除条目");
+            del.Click += (_, _) => DeleteOtherItem();
+            menu.Items.Add(add);
+            menu.Items.Add(del);
+            UiTheme.ApplyToolStrip(menu);
             dataGridView_other.ContextMenuStrip = menu;
         }
 
-        /// <summary>按当前单位工程加载其他项目（无则自动写入默认四项）。</summary>
         private void LoadOtherItems()
         {
             if (_otherRepo == null) return;
             try
             {
                 var list = _otherRepo.LoadOrSeed(CurrentUnitProjectCode);
-                _otherItems.Clear();
-                foreach (var item in list)
-                    _otherItems.Add(item);
-
-                // 同步到内存树，供费用汇总使用
+                _otherItems.RaiseListChangedEvents = false;
+                try
+                {
+                    _otherItems.Clear();
+                    foreach (var item in list)
+                        _otherItems.Add(item);
+                }
+                finally
+                {
+                    _otherItems.RaiseListChangedEvents = true;
+                    _otherItems.ResetBindings();
+                }
                 foreach (var item in list)
                     SyncOtherItemToMemory(item);
             }
@@ -146,13 +144,12 @@ namespace 施工定额
         private void DeleteOtherItem()
         {
             if (_otherRepo == null || dataGridView_other?.CurrentRow == null) return;
-            if (dataGridView_other.CurrentRow.Index < 0 || dataGridView_other.CurrentRow.Index >= _otherItems.Count)
-                return;
-
-            var item = _otherItems[dataGridView_other.CurrentRow.Index];
-            if (OtherProjectRepository.IsZgjCode(item.清单编码))
+            int idx = dataGridView_other.CurrentRow.Index;
+            if (idx < 0 || idx >= _otherItems.Count) return;
+            var item = _otherItems[idx];
+            if (OtherProjectRepository.IsZgjCode(item.清单编码) || item.名称 == "暂估价")
             {
-                ErrorHandler.ShowBusiness("暂估价不可删除。");
+                ErrorHandler.ShowBusiness("「暂估价」不可删除。");
                 return;
             }
 
@@ -165,7 +162,7 @@ namespace 施工定额
             {
                 if (_otherRepo.Delete(item.清单编码))
                 {
-                    _otherItems.Remove(item);
+                    _otherItems.RemoveAt(idx);
                     var mem = _allQingdan.FirstOrDefault(q => q.清单编码 == item.清单编码);
                     if (mem != null) _allQingdan.Remove(mem);
                     RefreshSummaryForCurrentUnit();
