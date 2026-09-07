@@ -93,6 +93,7 @@ namespace 施工定额
             _selection.SelectQingdan("");
             UpdateDisplay(DisplayType.Dinge);
             UpdateDisplay(DisplayType.Xiaohaoliang);
+            LoadOtherItems();
             RefreshSummaryForCurrentUnit();
         }
 
@@ -115,8 +116,12 @@ namespace 施工定额
             {
                 var u = _unitRepo.Add(name);
                 _currentUnitProjectCode = u.编码;
+                // 新单位工程自动生成默认其他项目
+                _otherRepo ??= new OtherProjectRepository(AppConfig.UserDbConn);
+                _otherRepo.EnsureDefaultsForUnit(u.编码);
                 ReloadUnitProjectTree(u.编码);
                 RebuildCategoryViews();
+                LoadOtherItems();
                 RefreshSummaryForCurrentUnit();
             }
             catch (Exception ex)
@@ -157,7 +162,7 @@ namespace 施工定额
                 return;
             }
             var confirm = MessageBox.Show(this,
-                $"确定删除单位工程「{node.Text}」吗？\n（其下不能有清单）",
+                $"确定删除单位工程「{node.Text}」吗？\n（其下不能有分部分项/措施清单；其他项目会一并清除）",
                 "确认删除", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm != DialogResult.Yes) return;
             try
@@ -166,6 +171,7 @@ namespace 施工定额
                 _currentUnitProjectCode = UnitProject.DefaultCode;
                 ReloadUnitProjectTree(UnitProject.DefaultCode);
                 RebuildCategoryViews();
+                LoadOtherItems();
                 RefreshSummaryForCurrentUnit();
             }
             catch (Exception ex)
