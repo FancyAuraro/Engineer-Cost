@@ -13,34 +13,27 @@ namespace 施工定额
             _connStr = connStr;
         }
 
+        public void EnsureDefault()
+        {
+            using var conn = new SqliteConnection(_connStr);
+            conn.Open();
+            conn.Execute(@"
+CREATE TABLE IF NOT EXISTS 单位工程 (
+  编码 TEXT PRIMARY KEY,
+  名称 TEXT NOT NULL,
+  排序 INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO 单位工程 (编码, 名称, 排序)
+SELECT @Code, @Name, 0
+WHERE NOT EXISTS (SELECT 1 FROM 单位工程 WHERE 编码 = @Code);",
+                new { Code = UnitProject.DefaultCode, Name = "默认单位工程" });
+        }
+
         public List<UnitProject> ListAll()
         {
             using var conn = new SqliteConnection(_connStr);
             return conn.Query<UnitProject>(
-                @"SELECT 编码, 名称, IFNULL(排序,0) AS 排序
-                  FROM 单位工程
-                  ORDER BY 排序, 编码").ToList();
-        }
-
-        public UnitProject EnsureDefault()
-        {
-            using var conn = new SqliteConnection(_connStr);
-            conn.Open();
-            var exists = conn.ExecuteScalar<int>(
-                "SELECT COUNT(1) FROM 单位工程 WHERE 编码=@Code",
-                new { Code = UnitProject.DefaultCode });
-            if (exists == 0)
-            {
-                conn.Execute(
-                    @"INSERT INTO 单位工程 (编码, 名称, 排序) VALUES (@编码, @名称, @排序)",
-                    new { 编码 = UnitProject.DefaultCode, 名称 = UnitProject.DefaultName, 排序 = 0 });
-            }
-            conn.Execute(
-                @"UPDATE 清单 SET 单位工程编码=@Code
-                  WHERE 单位工程编码 IS NULL OR TRIM(单位工程编码)=''",
-                new { Code = UnitProject.DefaultCode });
-
-            return new UnitProject { 编码 = UnitProject.DefaultCode, 名称 = UnitProject.DefaultName, 排序 = 0 };
+                "SELECT 编码, 名称, 排序 FROM 单位工程 ORDER BY 排序, 编码").ToList();
         }
 
         public UnitProject Add(string name)
@@ -86,6 +79,11 @@ namespace 施工定额
 
             using var conn = new SqliteConnection(_connStr);
             conn.Open();
+            // 先清理该单位下的其他项目（自动生成的默认项）
+            conn.Execute(
+                @"DELETE FROM 清单 WHERE 单位工程编码=@Code AND 项目类别=@Other",
+                new { Code = code, Other = QingdanCategory.其他项目 });
+
             var cnt = conn.ExecuteScalar<int>(
                 "SELECT COUNT(1) FROM 清单 WHERE 单位工程编码=@Code", new { Code = code });
             if (cnt > 0)

@@ -30,9 +30,11 @@ namespace 施工定额.Entity
         public string 清单编码 { get; set; } = "";
 
         /// <summary>暂估价暂不可改金额（功能未做）。</summary>
-        public bool IsAmountEditable => 名称 != "暂估价" && 清单编码 != "QT-ZGJ";
+        public bool IsAmountEditable =>
+            名称 != "暂估价" && !OtherProjectRepository.IsZgjCode(清单编码);
 
         /// <summary>名称是否可改（暂估价固定）。</summary>
-        public bool IsNameEditable => 清单编码 != "QT-ZGJ" && 名称 != "暂估价";
+        public bool IsNameEditable =>
+            !OtherProjectRepository.IsZgjCode(清单编码) && 名称 != "暂估价";
     }
 }
