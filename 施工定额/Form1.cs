@@ -78,16 +78,18 @@ namespace 施工定额
 
         public Form1(IQingdanRepository repo, ICostCalculationService calcService)
         {
-            InitializeComponent();
-            ApplyUiFont();
-            ApplyResponsiveLayout();
-            EnsureMeasureTab();
-            ApplyToolbarIcons();
-            Text = "施工定额";
-
             _repo = repo ?? throw new ArgumentNullException(nameof(repo));
             _calcService = calcService ?? throw new ArgumentNullException(nameof(calcService));
+            InitializeComponent();
+            EnsureMeasureTab();
+            ApplyToolbarIcons();
+            ApplyUiFont();
+            ApplyResponsiveLayout();
+            Shown += OnFirstShownApplySplitters;
+
             _selection = new SelectionState();
+            _selection.QingdanChanged += OnQingdanSelectionChanged;
+            _selection.DingeChanged += OnDingeSelectionChanged;
 
             _qingdanPresenter = new QingdanPresenter(_repo, _calcService, _allQingdan, UpdateDisplay);
             _summaryPresenter = new SummaryPresenter(_allQingdan, _calcService);
@@ -98,9 +100,7 @@ namespace 施工定额
             dataGridView1.Tag = QingdanCategory.分部分项;
             dataGridView1.ContextMenuStrip = _menuBuilder.BuildQingdanMenu(dataGridView1, QingdanCategory.分部分项);
 
-            _selection.QingdanSelectionChanged += OnQingdanSelectionChanged;
-            _selection.DingeSelectionChanged += OnDingeSelectionChanged;
-
+            EnsureMeasureTab();
             EnsureSettingsMenu();
             EnsureHelpMenu();
             WirePlaceholderMenus();
@@ -125,38 +125,35 @@ namespace 施工定额
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Horizontal,
-                SplitterWidth = 5,
-                Panel1MinSize = 0,
-                Panel2MinSize = 0
+                Name = "measureSplit"
             };
 
             dataGridView_measure = new FeatureDataGridView
             {
                 Dock = DockStyle.Fill,
                 Name = "dataGridView_measure",
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
+                Tag = QingdanCategory.措施项目
             };
-            dataGridView_measure.CellClick += dataGridView_measure_CellClick;
-            dataGridView_measure.CellDoubleClick += dataGridView_measure_CellDoubleClick;
-            dataGridView_measure.CellEndEdit += dataGridView_measure_CellEndEdit;
-
             DataGridView_measure_dinge = new DataGridView
             {
                 Dock = DockStyle.Fill,
                 Name = "DataGridView_measure_dinge",
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
             };
-            DataGridView_measure_dinge.CellClick += DataGridView_measure_dinge_CellClick;
-            DataGridView_measure_dinge.CellValueChanged += DataGridView_measure_dinge_CellValueChanged;
 
             measureSplit.Panel1.Controls.Add(dataGridView_measure);
             measureSplit.Panel2.Controls.Add(DataGridView_measure_dinge);
             tabPage措施.Controls.Add(measureSplit);
 
-            var insertAt = 1;
+            int insertAt = 0;
             for (int i = 0; i < tabControl1.TabPages.Count; i++)
             {
-                if (tabControl1.TabPages[i].Name == "tabPage1")
+                if (tabControl1.TabPages[i].Name == "tabPage分部分项" || tabControl1.TabPages[i].Text.Contains("分部分项"))
                 {
                     insertAt = i + 1;
                     break;
@@ -164,131 +161,12 @@ namespace 施工定额
             }
             tabControl1.TabPages.Insert(insertAt, tabPage措施);
 
-            Shown += (_, _) =>
-            {
-                if (measureSplit != null && measureSplit.Height > 80)
-                {
-                    try { measureSplit.SplitterDistance = (int)(measureSplit.Height * 0.55); }
-                    catch { }
-                }
-            };
-        }
-
-        private void EnsureSettingsMenu()
-        {
-            foreach (ToolStripItem item in menuStrip1.Items)
-            {
-                if (item.Text == "设置") return;
-            }
-            var settingsMenu = new ToolStripMenuItem("设置");
-            var feeItem = new ToolStripMenuItem("费率设置(&F)...");
-            feeItem.Click += (_, _) => OpenFeeSettings();
-            settingsMenu.DropDownItems.Add(feeItem);
-            menuStrip1.Items.Add(settingsMenu);
-        }
-
-        private void EnsureHelpMenu()
-        {
-            foreach (ToolStripItem item in menuStrip1.Items)
-            {
-                if (item.Text is "帮助" or "帮助(&H)") return;
-            }
-            var help = new ToolStripMenuItem("帮助(&H)");
-            var about = new ToolStripMenuItem("关于(&A)...");
-            about.Click += (_, _) => ShowAbout();
-            var openLog = new ToolStripMenuItem("打开日志目录");
-            openLog.Click += (_, _) => OpenFolder(AppLogger.LogDirectory);
-            var openData = new ToolStripMenuItem("打开数据目录");
-            openData.Click += (_, _) => OpenFolder(AppConfig.DataDirectory);
-            var restore = new ToolStripMenuItem("从备份恢复用户库...");
-            restore.Click += (_, _) => RestoreUserDbFromBackup();
-            help.DropDownItems.Add(about);
-            help.DropDownItems.Add(new ToolStripSeparator());
-            help.DropDownItems.Add(openLog);
-            help.DropDownItems.Add(openData);
-            help.DropDownItems.Add(restore);
-            menuStrip1.Items.Add(help);
-        }
-
-        private static void OpenFolder(string path)
-        {
-            try
-            {
-                Directory.CreateDirectory(path);
-                Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
-            }
-            catch (Exception ex) { ErrorHandler.Show(ex, "打开目录失败"); }
-        }
-
-        private void ShowAbout()
-        {
-            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            ErrorHandler.ShowBusiness(
-                $"施工定额（Engineer-Cost）\n\n版本：{ver}\n用户数据：{AppConfig.DataDirectory}\n系统定额库：{AppConfig.SystemDbFilePath}\n\n个人学习项目。",
-                "关于");
-        }
-
-        private void RestoreUserDbFromBackup()
-        {
-            var backups = UserDbBackup.ListBackups();
-            if (backups.Count == 0)
-            {
-                ErrorHandler.ShowBusiness($"未找到备份文件。\n备份目录：{UserDbBackup.BackupDirectory}", "恢复备份");
-                return;
-            }
-            using var ofd = new OpenFileDialog
-            {
-                Title = "选择用户库备份",
-                InitialDirectory = UserDbBackup.BackupDirectory,
-                Filter = "SQLite 数据库 (*.db)|*.db|所有文件 (*.*)|*.*",
-                CheckFileExists = true
-            };
-            if (ofd.ShowDialog(this) != DialogResult.OK) return;
-            var confirm = MessageBox.Show(this,
-                "恢复备份将覆盖当前用户库。\n恢复前会自动再备份一份当前库。\n\n是否继续？",
-                "确认恢复", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (confirm != DialogResult.Yes) return;
-            try
-            {
-                UserDbBackup.Restore(ofd.FileName, AppConfig.UserDbFilePath);
-                ReloadAndRecalculateEverything();
-                ErrorHandler.ShowBusiness("用户库已从备份恢复，并已重新加载数据。", "恢复备份");
-            }
-            catch (Exception ex) { ErrorHandler.Show(ex, "恢复备份失败"); }
-        }
-
-        private void WirePlaceholderMenus()
-        {
-            打开ToolStripMenuItem.Click += (_, _) =>
-                ErrorHandler.ShowBusiness("「打开工程」尚未实现，当前工程数据保存在用户库中。", "提示");
-            保存ToolStripMenuItem.Click += (_, _) =>
-                ErrorHandler.ShowBusiness("数据已在编辑时自动保存到用户库，无需手动保存。", "提示");
-        }
-
-        private void OpenFeeSettings()
-        {
-            using var form = new FeeSettingsForm(AppConfig.FeeRates);
-            if (form.ShowDialog(this) != DialogResult.OK) return;
-            try
-            {
-                AppConfig.SaveUserFeeRates(form.ResultRates);
-                _calcService = AppComposition.CreateCostCalculationService(form.ResultRates);
-                _qingdanPresenter.ReplaceCalcService(_calcService);
-                _summaryPresenter.ReplaceCalcService(_calcService);
-                ErrorHandler.ShowBusiness("费率已保存，并已按新费率重算全部清单。", "费率设置");
-            }
-            catch (Exception ex) { ErrorHandler.Show(ex, "保存费率失败"); }
-        }
-
-        private void OnQingdanSelectionChanged(object? sender, string code)
-        {
-            UpdateDisplay(DisplayType.Dinge);
-            UpdateDisplay(DisplayType.Xiaohaoliang);
-        }
-
-        private void OnDingeSelectionChanged(object? sender, (string code, string id) _)
-        {
-            UpdateDisplay(DisplayType.Xiaohaoliang);
+            dataGridView_measure.ContextMenuStrip = _menuBuilder.BuildQingdanMenu(dataGridView_measure, QingdanCategory.措施项目);
+            dataGridView_measure.CellClick += dataGridView_measure_CellClick;
+            dataGridView_measure.CellDoubleClick += dataGridView_measure_CellDoubleClick;
+            dataGridView_measure.CellEndEdit += dataGridView_measure_CellEndEdit;
+            DataGridView_measure_dinge.CellClick += DataGridView_measure_dinge_CellClick;
+            DataGridView_measure_dinge.CellValueChanged += DataGridView_measure_dinge_CellValueChanged;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -300,318 +178,80 @@ namespace 施工定额
         private void InitializeGridColumns()
         {
             GridManager.BindOnce(dataGridView1, myMemoryQingdanBindingList, GridColumns.Qingdan);
-            dataGridView1.Columns.Add(new DataGridViewButtonColumn
-            {
-                Name = "btnViewImage", HeaderText = "图片", Text = "查看",
-                UseColumnTextForButtonValue = true, Width = 60
-            });
-            GridLayoutStore.Attach(dataGridView1);
+            dataGridView1.CellClick += dataGridView1_CellClick;
+            dataGridView1.CellDoubleClick += dataGridView1_CellDoubleClick;
+            dataGridView1.CellContentClick += dataGridView1_CellContentClick;
+            dataGridView1.CellEndEdit += dataGridView1_CellEndEdit;
+
             GridManager.BindOnce(DataGridView_dinge, _dingeBindingList, GridColumns.Dinge);
             GridManager.BindOnce(dataGridView2, _xhlBindingList, GridColumns.Xiaohaoliang);
+
             if (dataGridView_measure != null)
-            {
                 GridManager.BindOnce(dataGridView_measure, _measureQingdanList, GridColumns.MeasureQingdan);
-                dataGridView_measure.Tag = QingdanCategory.措施项目;
-                dataGridView_measure.ContextMenuStrip = _menuBuilder.BuildQingdanMenu(dataGridView_measure, QingdanCategory.措施项目);
-            }
             if (DataGridView_measure_dinge != null)
                 GridManager.BindOnce(DataGridView_measure_dinge, _measureDingeBindingList, GridColumns.Dinge);
+
+            DataGridView_dinge.CellClick += DataGridView_dinge_CellClick;
+            DataGridView_dinge.CellValueChanged += DataGridView_dinge_CellValueChanged;
+            dataGridView2.CellValueChanged += dataGridView2_CellValueChanged;
         }
 
         public void UpdateDisplay(DisplayType type)
         {
             switch (type)
             {
-                case DisplayType.Qingdan: break;
+                case DisplayType.Qingdan:
+                    RebuildCategoryViews();
+                    break;
                 case DisplayType.Dinge:
                     {
-                        _suppressGridEvents = true;
+                        _dingeBindingList.RaiseListChangedEvents = false;
+                        _measureDingeBindingList.RaiseListChangedEvents = false;
                         try
                         {
-                            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-                            var list = currentQd?.定额列表 ?? Enumerable.Empty<Dinge>();
-                            if (currentQd != null && QingdanCategory.IsMeasure(currentQd.项目类别))
+                            _dingeBindingList.Clear();
+                            _measureDingeBindingList.Clear();
+                            var qd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
+                            if (qd != null)
                             {
-                                _measureDingeBindingList.ReplaceAll(list);
-                                _dingeBindingList.ReplaceAll(Enumerable.Empty<Dinge>());
-                            }
-                            else
-                            {
-                                _dingeBindingList.ReplaceAll(list);
-                                _measureDingeBindingList.ReplaceAll(Enumerable.Empty<Dinge>());
+                                var target = QingdanCategory.IsMeasure(qd.项目类别)
+                                    ? _measureDingeBindingList
+                                    : _dingeBindingList;
+                                foreach (var d in qd.定额列表)
+                                    target.Add(d);
                             }
                         }
-                        finally { _suppressGridEvents = false; }
+                        finally
+                        {
+                            _dingeBindingList.RaiseListChangedEvents = true;
+                            _measureDingeBindingList.RaiseListChangedEvents = true;
+                            _dingeBindingList.ResetBindings();
+                            _measureDingeBindingList.ResetBindings();
+                        }
                         break;
                     }
                 case DisplayType.Xiaohaoliang:
                     {
-                        _suppressGridEvents = true;
+                        _xhlBindingList.RaiseListChangedEvents = false;
                         try
                         {
-                            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-                            var currentDg = currentQd?.定额列表.FirstOrDefault(
-                                d => d.定额编码 == _selection.SelectedDingeCode && d.ID号 == _selection.SelectedDingeID);
-                            _xhlBindingList.ReplaceAll(currentDg?.消耗量列表 ?? Enumerable.Empty<Xiaohaoliang>());
+                            _xhlBindingList.Clear();
+                            var qd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
+                            var dg = qd?.定额列表.FirstOrDefault(d => d.ID号 == _selection.SelectedDingeId);
+                            if (dg != null)
+                            {
+                                foreach (var x in dg.消耗量列表)
+                                    _xhlBindingList.Add(x);
+                            }
                         }
-                        finally { _suppressGridEvents = false; }
+                        finally
+                        {
+                            _xhlBindingList.RaiseListChangedEvents = true;
+                            _xhlBindingList.ResetBindings();
+                        }
                         break;
                     }
             }
-        }
-
-        private void dataGridView1_CellClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex == -1) return;
-            _selection.SelectQingdan(dataGridView1.Rows[e.RowIndex].Cells["清单编码"].Value?.ToString() ?? "");
-        }
-
-        private void dataGridView_measure_CellClick(object? sender, DataGridViewCellEventArgs e)
-        {
-            if (dataGridView_measure == null || e.RowIndex < 0) return;
-            _selection.SelectQingdan(dataGridView_measure.Rows[e.RowIndex].Cells["清单编码"].Value?.ToString() ?? "");
-        }
-
-        private void dataGridView1_CellDoubleClick(object sender, DataGridViewCellEventArgs e) =>
-            OpenImportFormFromGrid(dataGridView1, e.RowIndex);
-
-        private void dataGridView_measure_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
-        {
-            if (dataGridView_measure == null) return;
-            OpenImportFormFromGrid(dataGridView_measure, e.RowIndex);
-        }
-
-        private void OpenImportFormFromGrid(DataGridView grid, int rowIndex)
-        {
-            if (rowIndex < 0) return;
-            string qingdanCode = grid.Rows[rowIndex].Cells["清单编码"].Value?.ToString() ?? "";
-            if (string.IsNullOrEmpty(qingdanCode))
-            {
-                ErrorHandler.ShowBusiness("当前选中的清单编码为空，无法打开定额库。");
-                return;
-            }
-            string category = QingdanCategory.分部分项;
-            if (grid == dataGridView_measure || (grid.Tag is string tag && QingdanCategory.IsMeasure(tag)))
-                category = QingdanCategory.措施项目;
-            Form2 f2 = AppComposition.CreateImportForm(qingdanCode, category, CurrentUnitProjectCode);
-            f2.DataImported += () =>
-            {
-                if (IsDisposed) return;
-                if (InvokeRequired) Invoke(new Action(ReloadAndRecalculateEverything));
-                else ReloadAndRecalculateEverything();
-            };
-            f2.Show();
-        }
-
-        private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e) { }
-
-        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0) return;
-            if (dataGridView1.Columns[e.ColumnIndex].Name != "btnViewImage") return;
-            string code = dataGridView1.Rows[e.RowIndex].Cells["清单编码"].Value?.ToString() ?? "";
-            if (string.IsNullOrEmpty(code)) return;
-            string imageFolder = Path.Combine(AppConfig.DataDirectory, "images", code);
-            if (!Directory.Exists(imageFolder))
-                imageFolder = Path.Combine(AppContext.BaseDirectory, code);
-            if (!Directory.Exists(imageFolder))
-            {
-                ErrorHandler.ShowBusiness($"未找到图片文件夹：{imageFolder}");
-                return;
-            }
-            var supportedExt = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
-            var imageFiles = Directory.GetFiles(imageFolder)
-                .Where(f => supportedExt.Contains(Path.GetExtension(f).ToLowerInvariant())).ToList();
-            if (imageFiles.Count == 0)
-            {
-                ErrorHandler.ShowBusiness("该清单文件夹下没有图片。");
-                return;
-            }
-            new ImageViewerForm(code, imageFiles).Show(this);
-        }
-
-        private void tabControl1_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (tabControl1.SelectedIndex < 0) return;
-            string selectedTabName = tabControl1.TabPages[tabControl1.SelectedIndex].Name;
-            if (selectedTabName == "tabRenCaiJi")
-                dataGridView3.DataSource = _summaryPresenter.GetRenCaiJiSummaryFromMemory("", CurrentUnitProjectCode);
-            if (selectedTabName == "tabCostSummary")
-                dataGridView4.DataSource = _summaryPresenter.GetCostSummaryData(CurrentUnitProjectCode);
-        }
-
-        private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
-        {
-            dataGridView3.DataSource = _summaryPresenter.GetRenCaiJiSummaryFromMemory(e.Node?.Text ?? "", CurrentUnitProjectCode);
-        }
-
-        private void dataGridView2_CellValueChanged(object sender, DataGridViewCellEventArgs e)
-        {
-            if (_suppressGridEvents || e.RowIndex < 0) return;
-            dataGridView2.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            var source = dataGridView2.DataSource as BindingList<Xiaohaoliang>;
-            if (source == null || e.RowIndex >= source.Count) return;
-            var xhl = source[e.RowIndex];
-            var colName = dataGridView2.Columns[e.ColumnIndex].Name;
-            var cellValue = dataGridView2.Rows[e.RowIndex].Cells[e.ColumnIndex].Value;
-            try
-            {
-                switch (colName)
-                {
-                    case "市场价":
-                        if (decimal.TryParse(cellValue?.ToString(), out var p))
-                            _qingdanPresenter.OnMarketPriceChanged(xhl, p);
-                        return;
-                    case "含量":
-                        if (decimal.TryParse(cellValue?.ToString(), out var c))
-                            _qingdanPresenter.OnXiaohaoliangHanliangChanged(xhl, c);
-                        return;
-                    default: return;
-                }
-            }
-            catch (Exception ex) { ErrorHandler.Show(ex); }
-        }
-
-        private void HandleDingeCellValueChanged(DataGridView grid, BindingList<Dinge> binding, DataGridViewCellEventArgs e)
-        {
-            if (_suppressGridEvents || e.RowIndex < 0) return;
-            grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-            if (currentQd == null) return;
-            _suppressGridEvents = true;
-            try
-            {
-                var colName = grid.Columns[e.ColumnIndex].Name;
-                if (colName == "换算系数")
-                {
-                    var dg = binding.ElementAtOrDefault(e.RowIndex);
-                    if (dg != null) _qingdanPresenter.OnDingeConversionFactorChanged(currentQd, dg);
-                    else _qingdanPresenter.OnDingeChanged(currentQd);
-                }
-                else _qingdanPresenter.OnDingeChanged(currentQd);
-            }
-            catch (Exception ex) { ErrorHandler.Show(ex); }
-            finally
-            {
-                BeginInvoke(new Action(() => { if (!IsDisposed) _suppressGridEvents = false; }));
-            }
-        }
-
-        private void DataGridView_dinge_CellValueChanged(object sender, DataGridViewCellEventArgs e) =>
-            HandleDingeCellValueChanged(DataGridView_dinge, _dingeBindingList, e);
-
-        private void DataGridView_measure_dinge_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
-        {
-            if (DataGridView_measure_dinge == null) return;
-            HandleDingeCellValueChanged(DataGridView_measure_dinge, _measureDingeBindingList, e);
-        }
-
-        private void DataGridView_dinge_CellClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0) return;
-            string code = DataGridView_dinge.Rows[e.RowIndex].Cells["定额编码"].Value?.ToString() ?? "";
-            string id = DataGridView_dinge.Rows[e.RowIndex].Cells["ID号"].Value?.ToString() ?? "";
-            _selection.SelectDinge(code, id);
-        }
-
-        private void DataGridView_measure_dinge_CellClick(object? sender, DataGridViewCellEventArgs e)
-        {
-            if (DataGridView_measure_dinge == null || e.RowIndex < 0) return;
-            string code = DataGridView_measure_dinge.Rows[e.RowIndex].Cells["定额编码"].Value?.ToString() ?? "";
-            string id = DataGridView_measure_dinge.Rows[e.RowIndex].Cells["ID号"].Value?.ToString() ?? "";
-            _selection.SelectDinge(code, id);
-        }
-
-        private void dataGridView1_CellEndEdit(object sender, DataGridViewCellEventArgs e) =>
-            HandleQingdanCellEndEdit(dataGridView1, myMemoryQingdanBindingList, e);
-
-        private void dataGridView_measure_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
-        {
-            if (dataGridView_measure == null) return;
-            HandleQingdanCellEndEdit(dataGridView_measure, _measureQingdanList, e);
-        }
-
-        private void HandleQingdanCellEndEdit(DataGridView grid, BindingList<Qingdan> list, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0) return;
-            var colName = grid.Columns[e.ColumnIndex].Name;
-            var changedQd = list.ElementAtOrDefault(e.RowIndex);
-            if (changedQd == null) return;
-            try
-            {
-                if (colName == "工程量") { _qingdanPresenter.OnQingdanWorkAmountChanged(changedQd); return; }
-                _qingdanPresenter.SaveQingdanFields(changedQd);
-            }
-            catch (Exception ex) { ErrorHandler.Show(ex); }
-        }
-
-        private void toolStripButton2_Click(object sender, EventArgs e) =>
-            ExportCoordinator.ExportYdjc(this, _allQingdan, _calcService);
-
-        private async void toolStripButton1_Click(object sender, EventArgs e)
-        {
-            var btn = sender as ToolStripItem;
-            try
-            {
-                if (btn != null) btn.Enabled = false;
-                Cursor = Cursors.WaitCursor;
-                await UpdateCoordinator.CheckAllAsync(this, silentIfUpToDate: false);
-            }
-            finally
-            {
-                Cursor = Cursors.Default;
-                if (btn != null) btn.Enabled = true;
-            }
-        }
-
-        private void ApplyToolbarIcons()
-        {
-            toolStripButton1.Image = CreateRefreshIcon();
-            toolStripButton1.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            toolStripButton1.TextImageRelation = TextImageRelation.ImageAboveText;
-            toolStripButton2.Image = CreateExportIcon();
-            toolStripButton2.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            toolStripButton2.TextImageRelation = TextImageRelation.ImageAboveText;
-            toolStripButton2.Text = "导出";
-        }
-
-        private void ApplyUiFont()
-        {
-            UiTheme.ApplyTo(this);
-            UiTheme.ApplyToolStrip(menuStrip1);
-            UiTheme.ApplyToolStrip(toolStrip1);
-        }
-
-        private static Bitmap CreateRefreshIcon()
-        {
-            const int size = 32;
-            var bmp = new Bitmap(size, size);
-            using var g = Graphics.FromImage(bmp);
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-            using var pen = new Pen(Color.FromArgb(0, 120, 215), 2.5f);
-            g.DrawArc(pen, new Rectangle(5, 5, size - 10, size - 10), 40, 280);
-            using var brush = new SolidBrush(Color.FromArgb(0, 120, 215));
-            g.FillPolygon(brush, new[] { new PointF(size - 7, 8), new PointF(size - 14, 6), new PointF(size - 12, 14) });
-            return bmp;
-        }
-
-        private static Bitmap CreateExportIcon()
-        {
-            const int size = 32;
-            var bmp = new Bitmap(size, size);
-            using var g = Graphics.FromImage(bmp);
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-            using var pen = new Pen(Color.FromArgb(16, 124, 16), 2f);
-            using var brush = new SolidBrush(Color.FromArgb(16, 124, 16));
-            g.DrawRectangle(pen, 8, 4, 16, 22);
-            g.DrawLine(pen, 18, 4, 18, 10);
-            g.DrawLine(pen, 18, 10, 24, 10);
-            g.DrawLine(pen, 18, 4, 24, 10);
-            g.DrawLine(pen, 16, 14, 16, 22);
-            g.FillPolygon(brush, new[] { new PointF(16, 24), new PointF(12, 20), new PointF(20, 20) });
-            return bmp;
         }
     }
 }
