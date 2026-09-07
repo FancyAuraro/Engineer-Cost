@@ -78,44 +78,48 @@ namespace 施工定额
             if (dataGridView_other == null) return;
             if (dataGridView_other.DataSource != null) return;
 
-            GridManager.BindOnce(dataGridView_other, _otherItems, new List<ColumnConfig>
+            GridManager.BindOnce(dataGridView_other, _otherItems);
+            dataGridView_other.AutoGenerateColumns = false;
+            dataGridView_other.Columns.Clear();
+            dataGridView_other.Columns.Add(new DataGridViewTextBoxColumn
             {
-                new() { FieldName = "名称", HeaderText = "名称", Width = 180, ReadOnly = false },
-                new() { FieldName = "金额", HeaderText = "金额", Width = 120, ReadOnly = false,
-                        Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                Name = "名称",
+                DataPropertyName = "名称",
+                HeaderText = "名称",
+                Width = 200
             });
+            dataGridView_other.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "金额",
+                DataPropertyName = "金额",
+                HeaderText = "金额",
+                Width = 120
+            });
+
             dataGridView_other.CellBeginEdit += dataGridView_other_CellBeginEdit;
             dataGridView_other.CellEndEdit += dataGridView_other_CellEndEdit;
 
-            var menu = new ContextMenuStrip { Font = UiTheme.Font };
-            var add = new ToolStripMenuItem("新增条目");
-            add.Click += (_, _) => AddOtherItem();
-            var del = new ToolStripMenuItem("删除条目");
-            del.Click += (_, _) => DeleteOtherItem();
-            menu.Items.Add(add);
-            menu.Items.Add(del);
-            UiTheme.ApplyToolStrip(menu);
+            var menu = new ContextMenuStrip();
+            menu.Items.Add("新增", null, (_, _) => AddOtherItem());
+            menu.Items.Add("删除", null, (_, _) => DeleteOtherItem());
+            UiTheme.ApplyContextMenu(menu);
             dataGridView_other.ContextMenuStrip = menu;
         }
 
+        /// <summary>按当前单位工程加载其他项目（无则自动写入默认四项）。</summary>
         private void LoadOtherItems()
         {
             if (_otherRepo == null) return;
             try
             {
-                var list = _otherRepo.LoadOrSeed();
-                _otherItems.RaiseListChangedEvents = false;
-                try
-                {
-                    _otherItems.Clear();
-                    foreach (var item in list)
-                        _otherItems.Add(item);
-                }
-                finally
-                {
-                    _otherItems.RaiseListChangedEvents = true;
-                    _otherItems.ResetBindings();
-                }
+                var list = _otherRepo.LoadOrSeed(CurrentUnitProjectCode);
+                _otherItems.Clear();
+                foreach (var item in list)
+                    _otherItems.Add(item);
+
+                // 同步到内存树，供费用汇总使用
+                foreach (var item in list)
+                    SyncOtherItemToMemory(item);
             }
             catch (Exception ex)
             {
@@ -128,9 +132,10 @@ namespace 施工定额
             if (_otherRepo == null) return;
             try
             {
-                var item = _otherRepo.AddCustom("新增项目", 0);
+                var item = _otherRepo.AddCustom("新增项目", 0, CurrentUnitProjectCode);
                 _otherItems.Add(item);
                 SyncOtherItemToMemory(item);
+                RefreshSummaryForCurrentUnit();
             }
             catch (Exception ex)
             {
@@ -141,27 +146,29 @@ namespace 施工定额
         private void DeleteOtherItem()
         {
             if (_otherRepo == null || dataGridView_other?.CurrentRow == null) return;
-            int idx = dataGridView_other.CurrentRow.Index;
-            if (idx < 0 || idx >= _otherItems.Count) return;
-            var item = _otherItems[idx];
-            if (item.清单编码 == "QT-ZGJ")
+            if (dataGridView_other.CurrentRow.Index < 0 || dataGridView_other.CurrentRow.Index >= _otherItems.Count)
+                return;
+
+            var item = _otherItems[dataGridView_other.CurrentRow.Index];
+            if (OtherProjectRepository.IsZgjCode(item.清单编码))
             {
-                ErrorHandler.ShowBusiness("「暂估价」不可删除。");
+                ErrorHandler.ShowBusiness("暂估价不可删除。");
                 return;
             }
-            var confirm = MessageBox.Show(
+
+            var confirm = MessageBox.Show(this,
                 $"确定删除「{item.名称}」吗？",
-                "确认删除",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
+                "确认删除", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirm != DialogResult.Yes) return;
+
             try
             {
                 if (_otherRepo.Delete(item.清单编码))
                 {
-                    _otherItems.RemoveAt(idx);
+                    _otherItems.Remove(item);
                     var mem = _allQingdan.FirstOrDefault(q => q.清单编码 == item.清单编码);
                     if (mem != null) _allQingdan.Remove(mem);
+                    RefreshSummaryForCurrentUnit();
                 }
             }
             catch (Exception ex)
@@ -195,8 +202,9 @@ namespace 施工定额
                         item.金额 = 0;
                         return;
                     }
-                    _otherRepo.SaveAmount(item.清单编码, item.金额);
+                    _otherRepo.SaveAmount(item.清单编码, item.金额, CurrentUnitProjectCode);
                     SyncOtherItemToMemory(item);
+                    RefreshSummaryForCurrentUnit();
                 }
                 else if (col == "名称")
                 {
@@ -223,7 +231,8 @@ namespace 施工定额
                     项目类别 = QingdanCategory.其他项目,
                     综合合价 = item.金额,
                     综合单价 = 0,
-                    工程量 = 0
+                    工程量 = 0,
+                    单位工程编码 = CurrentUnitProjectCode
                 };
                 _allQingdan.Add(qd);
             }
@@ -232,6 +241,7 @@ namespace 施工定额
                 qd.清单名称 = item.名称;
                 qd.综合合价 = item.金额;
                 qd.项目类别 = QingdanCategory.其他项目;
+                qd.单位工程编码 = CurrentUnitProjectCode;
             }
         }
     }
