@@ -63,7 +63,7 @@ INSERT INTO 其他项目 (名称, 金额) VALUES ('暂列金额', 12.34);");
                 Assert.Equal(1, Convert.ToInt32(Scalar(verify, "SELECT COUNT(*) FROM \"单位工程\" WHERE \"编码\"='DW001'")));
                 Assert.Equal("DW001", Scalar(verify, "SELECT \"单位工程编码\" FROM 清单 WHERE 清单编码='Q1'"));
                 Assert.Equal(12.34m, Convert.ToDecimal(Scalar(verify, "SELECT \"综合合价\" FROM 清单 WHERE 清单编码='QT-ZJJE'")));
-                Assert.Equal(1, Convert.ToInt32(Scalar(verify, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='其他项目'")) == 0 ? 0 : 1);
+                Assert.Equal(0, Convert.ToInt32(Scalar(verify, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='其他项目'")));
                 Assert.Equal(1, Convert.ToInt32(Scalar(verify, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='uidx_消耗量_定额ID_编码'")));
             }
             finally
