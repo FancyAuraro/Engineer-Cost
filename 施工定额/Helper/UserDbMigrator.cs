@@ -163,7 +163,7 @@ WHERE NOT EXISTS (
                 {
                     using var select = conn.CreateCommand();
                     select.Transaction = tx;
-                    select.CommandText = @"SELECT ""金额"" FROM ""其他项目"" WHERE ""名称""=$n";
+                    select.CommandText = "SELECT \"金额\" FROM \"其他项目\" WHERE \"名称\"=$n";
                     select.Parameters.AddWithValue("$n", name);
                     var value = select.ExecuteScalar();
                     if (value == null || value is DBNull) continue;
@@ -171,7 +171,7 @@ WHERE NOT EXISTS (
                     var amount = code == "QT-ZGJ" ? 0m : Convert.ToDecimal(value);
                     using var update = conn.CreateCommand();
                     update.Transaction = tx;
-                    update.CommandText = @"UPDATE ""清单"" SET ""综合合价""=$a WHERE ""清单编码""=$c AND ""项目类别""='其他项目'";
+                    update.CommandText = "UPDATE \"清单\" SET \"综合合价\"=$a WHERE \"清单编码\"=$c AND \"项目类别\"='其他项目'";
                     update.Parameters.AddWithValue("$a", amount);
                     update.Parameters.AddWithValue("$c", code);
                     update.ExecuteNonQuery();
