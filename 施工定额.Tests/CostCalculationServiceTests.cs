@@ -29,10 +29,7 @@ namespace 施工定额.Tests
         {
             return new Dinge
             {
-                ID号 = "dg1",
-                定额编码 = "D-001",
-                定额工程量 = workAmount,
-                换算系数 = 1m,
+                ID号 = "dg1", 定额编码 = "D-001", 定额工程量 = workAmount, 换算系数 = 1m,
                 消耗量列表 =
                 {
                     new Xiaohaoliang { 消耗量类别 = "人", 消耗量编码 = "L1", 含量 = 2m, 市场价 = 100m },
@@ -99,6 +96,31 @@ namespace 施工定额.Tests
         }
 
         [Fact]
+        public void RecalculateDinge_NegativeWorkAmount_PreservesMathematicalResult()
+        {
+            var svc = CreateService(overheadRate: 0m, profitRate: 0m);
+            var dg = SampleDinge(-2m);
+            svc.RecalculateDinge(dg);
+            Assert.Equal(-4m, dg.消耗量列表[0].数量);
+            Assert.Equal(-400m, dg.消耗量列表[0].市场价合计);
+            Assert.Equal(-700m, dg.费用构成.不含税合价);
+        }
+
+        [Fact]
+        public void RecalculateQingdan_OtherProjectIsNotRecalculated()
+        {
+            var svc = CreateService();
+            var qd = new Qingdan
+            {
+                清单编码 = "QT-ZJJE", 项目类别 = QingdanCategory.其他项目, 工程量 = 10m,
+                综合合价 = 1234.56m, 定额列表 = { SampleDinge(10m) }
+            };
+            svc.RecalculateQingdan(qd);
+            Assert.Equal(1234.56m, qd.综合合价);
+            Assert.Equal(0m, qd.定额列表[0].定额合价);
+        }
+
+        [Fact]
         public void RecalculateQingdan_AggregatesDingeAndUnitPrice()
         {
             var svc = CreateService(overheadRate: 0m, profitRate: 0m);
@@ -119,6 +141,20 @@ namespace 施工定额.Tests
             Assert.Equal(3500m, summary.分部分项合价);
             Assert.Equal(315m, summary.税金);
             Assert.Equal(3815m, summary.含税总价);
+        }
+
+        [Fact]
+        public void CalculateProjectSummary_SeparatesMeasureAndOtherProjects()
+        {
+            var svc = CreateService(overheadRate: 0m, profitRate: 0m, vat: 0m);
+            var fenbu = new Qingdan { 清单编码 = "Q1", 项目类别 = QingdanCategory.分部分项, 综合合价 = 100m };
+            var measure = new Qingdan { 清单编码 = "Q2", 项目类别 = QingdanCategory.措施项目, 综合合价 = 20m };
+            var other = new Qingdan { 清单编码 = "Q3", 项目类别 = QingdanCategory.其他项目, 综合合价 = 30m };
+            var summary = svc.CalculateProjectSummary(new[] { fenbu, measure, other });
+            Assert.Equal(100m, summary.分部分项合价);
+            Assert.Equal(20m, summary.措施项目合价);
+            Assert.Equal(30m, summary.其他项目合价);
+            Assert.Equal(150m, summary.含税总价);
         }
     }
 }
