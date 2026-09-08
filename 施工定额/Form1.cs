@@ -23,6 +23,7 @@ namespace 施工定额
         private readonly QingdanPresenter _qingdanPresenter;
         private readonly SummaryPresenter _summaryPresenter;
         private readonly ContextMenuBuilder _menuBuilder;
+        private readonly Form1DisplayCoordinator _displayCoordinator;
 
         private TabPage? tabPage措施;
         private SplitContainer? measureSplit;
@@ -42,34 +43,7 @@ namespace 施工定额
             UpdateDisplay(DisplayType.Xiaohaoliang);
         }
 
-        private void RebuildCategoryViews()
-        {
-            myMemoryQingdanBindingList.RaiseListChangedEvents = false;
-            _measureQingdanList.RaiseListChangedEvents = false;
-            try
-            {
-                myMemoryQingdanBindingList.Clear();
-                _measureQingdanList.Clear();
-                foreach (var qd in _allQingdan)
-                {
-                    if (QingdanCategory.IsOther(qd.项目类别))
-                        continue;
-                    if (!MatchesCurrentUnit(qd))
-                        continue;
-                    if (QingdanCategory.IsMeasure(qd.项目类别))
-                        _measureQingdanList.Add(qd);
-                    else
-                        myMemoryQingdanBindingList.Add(qd);
-                }
-            }
-            finally
-            {
-                myMemoryQingdanBindingList.RaiseListChangedEvents = true;
-                _measureQingdanList.RaiseListChangedEvents = true;
-                myMemoryQingdanBindingList.ResetBindings();
-                _measureQingdanList.ResetBindings();
-            }
-        }
+        private void RebuildCategoryViews() => _displayCoordinator.RebuildCategoryViews();
 
         public Form1()
             : this(AppComposition.CreateQingdanRepository(), AppComposition.CreateCostCalculationService())
@@ -91,6 +65,16 @@ namespace 施工定额
 
             _qingdanPresenter = new QingdanPresenter(_repo, _calcService, _allQingdan, UpdateDisplay);
             _summaryPresenter = new SummaryPresenter(_allQingdan, _calcService);
+            _displayCoordinator = new Form1DisplayCoordinator(
+                _allQingdan,
+                myMemoryQingdanBindingList,
+                _measureQingdanList,
+                _dingeBindingList,
+                _measureDingeBindingList,
+                _xhlBindingList,
+                () => CurrentUnitProjectCode,
+                code => _allQingdan.FirstOrDefault(q => q.清单编码 == code),
+                value => _suppressGridEvents = value);
 
             _menuBuilder = new ContextMenuBuilder(
                 _qingdanPresenter, _selection, ReloadAndRecalculateEverything,
@@ -201,46 +185,11 @@ namespace 施工定额
                 GridManager.BindOnce(DataGridView_measure_dinge, _measureDingeBindingList, GridColumns.Dinge);
         }
 
-        public void UpdateDisplay(DisplayType type)
-        {
-            switch (type)
-            {
-                case DisplayType.Qingdan: break;
-                case DisplayType.Dinge:
-                    {
-                        _suppressGridEvents = true;
-                        try
-                        {
-                            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-                            var list = currentQd?.定额列表 ?? Enumerable.Empty<Dinge>();
-                            if (currentQd != null && QingdanCategory.IsMeasure(currentQd.项目类别))
-                            {
-                                _measureDingeBindingList.ReplaceAll(list);
-                                _dingeBindingList.ReplaceAll(Enumerable.Empty<Dinge>());
-                            }
-                            else
-                            {
-                                _dingeBindingList.ReplaceAll(list);
-                                _measureDingeBindingList.ReplaceAll(Enumerable.Empty<Dinge>());
-                            }
-                        }
-                        finally { _suppressGridEvents = false; }
-                        break;
-                    }
-                case DisplayType.Xiaohaoliang:
-                    {
-                        _suppressGridEvents = true;
-                        try
-                        {
-                            var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
-                            var currentDg = currentQd?.定额列表.FirstOrDefault(
-                                d => d.定额编码 == _selection.SelectedDingeCode && d.ID号 == _selection.SelectedDingeID);
-                            _xhlBindingList.ReplaceAll(currentDg?.消耗量列表 ?? Enumerable.Empty<Xiaohaoliang>());
-                        }
-                        finally { _suppressGridEvents = false; }
-                        break;
-                    }
-            }
-        }
+        public void UpdateDisplay(DisplayType type) =>
+            _displayCoordinator.UpdateDisplay(
+                type,
+                _selection.SelectedQingdanCode,
+                _selection.SelectedDingeCode,
+                _selection.SelectedDingeID);
     }
 }
