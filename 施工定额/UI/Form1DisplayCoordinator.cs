@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using 施工定额.Entity;
+using 施工定额.Helper;
 
 namespace 施工定额.UI
 {
@@ -17,8 +18,6 @@ namespace 施工定额.UI
         private readonly BindingList<Xiaohaoliang> _xiaohaoliang;
         private readonly Func<string> _currentUnitCode;
         private readonly Func<string, Qingdan?> _findQingdan;
-        private readonly Func<Qingdan?, IEnumerable<Dinge>> _getDinge;
-        private readonly Func<Dinge?, IEnumerable<Xiaohaoliang>> _getXiaohaoliang;
         private readonly Action<bool> _setSuppressGridEvents;
 
         public Form1DisplayCoordinator(
@@ -41,13 +40,37 @@ namespace 施工定额.UI
             _currentUnitCode = currentUnitCode;
             _findQingdan = findQingdan;
             _setSuppressGridEvents = setSuppressGridEvents;
-            _getDinge = qd => qd?.定额列表 ?? Enumerable.Empty<Dinge>();
-            _getXiaohaoliang = dg => dg?.消耗量列表 ?? Enumerable.Empty<Xiaohaoliang>();
         }
 
         public void RebuildCategoryViews()
         {
-            ReplaceByCategory(_fenbuQingdan, _measureQingdan);
+            _fenbuQingdan.RaiseListChangedEvents = false;
+            _measureQingdan.RaiseListChangedEvents = false;
+            try
+            {
+                _fenbuQingdan.Clear();
+                _measureQingdan.Clear();
+                var unitCode = _currentUnitCode();
+                foreach (var qd in _allQingdan)
+                {
+                    if (QingdanCategory.IsOther(qd.项目类别)) continue;
+                    var qdUnit = string.IsNullOrWhiteSpace(qd.单位工程编码)
+                        ? UnitProject.DefaultCode
+                        : qd.单位工程编码.Trim();
+                    if (!string.Equals(qdUnit, unitCode, StringComparison.Ordinal)) continue;
+                    if (QingdanCategory.IsMeasure(qd.项目类别))
+                        _measureQingdan.Add(qd);
+                    else
+                        _fenbuQingdan.Add(qd);
+                }
+            }
+            finally
+            {
+                _fenbuQingdan.RaiseListChangedEvents = true;
+                _measureQingdan.RaiseListChangedEvents = true;
+                _fenbuQingdan.ResetBindings();
+                _measureQingdan.ResetBindings();
+            }
         }
 
         public void UpdateDisplay(DisplayType type, string selectedQingdanCode, string selectedDingeCode, string selectedDingeId)
@@ -62,7 +85,7 @@ namespace 施工定额.UI
                     case DisplayType.Dinge:
                     {
                         var currentQd = _findQingdan(selectedQingdanCode);
-                        var list = _getDinge(currentQd);
+                        var list = currentQd?.定额列表 ?? Enumerable.Empty<Dinge>();
                         if (currentQd != null && QingdanCategory.IsMeasure(currentQd.项目类别))
                         {
                             _measureDinge.ReplaceAll(list);
@@ -78,9 +101,9 @@ namespace 施工定额.UI
                     case DisplayType.Xiaohaoliang:
                     {
                         var currentQd = _findQingdan(selectedQingdanCode);
-                        var currentDg = _getDinge(currentQd).FirstOrDefault(
+                        var currentDg = currentQd?.定额列表.FirstOrDefault(
                             d => d.定额编码 == selectedDingeCode && d.ID号 == selectedDingeId);
-                        _xiaohaoliang.ReplaceAll(_getXiaohaoliang(currentDg));
+                        _xiaohaoliang.ReplaceAll(currentDg?.消耗量列表 ?? Enumerable.Empty<Xiaohaoliang>());
                         break;
                     }
                 }
@@ -88,37 +111,6 @@ namespace 施工定额.UI
             finally
             {
                 _setSuppressGridEvents(false);
-            }
-        }
-
-        private void ReplaceByCategory(BindingList<Qingdan> fenbu, BindingList<Qingdan> measure)
-        {
-            fenbu.RaiseListChangedEvents = false;
-            measure.RaiseListChangedEvents = false;
-            try
-            {
-                fenbu.Clear();
-                measure.Clear();
-                var unitCode = _currentUnitCode();
-                foreach (var qd in _allQingdan)
-                {
-                    if (QingdanCategory.IsOther(qd.项目类别)) continue;
-                    var qdUnit = string.IsNullOrWhiteSpace(qd.单位工程编码)
-                        ? UnitProject.DefaultCode
-                        : qd.单位工程编码.Trim();
-                    if (!string.Equals(qdUnit, unitCode, StringComparison.Ordinal)) continue;
-                    if (QingdanCategory.IsMeasure(qd.项目类别))
-                        measure.Add(qd);
-                    else
-                        fenbu.Add(qd);
-                }
-            }
-            finally
-            {
-                fenbu.RaiseListChangedEvents = true;
-                measure.RaiseListChangedEvents = true;
-                fenbu.ResetBindings();
-                measure.ResetBindings();
             }
         }
     }
