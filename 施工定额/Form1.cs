@@ -107,6 +107,7 @@ namespace 施工定额
 
             measureSplit = new SplitContainer
             {
+                Name = "measureSplit",
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Horizontal,
                 SplitterWidth = 5,
@@ -147,15 +148,7 @@ namespace 施工定额
                 }
             }
             tabControl1.TabPages.Insert(insertAt, tabPage措施);
-
-            Shown += (_, _) =>
-            {
-                if (measureSplit != null && measureSplit.Height > 80)
-                {
-                    try { measureSplit.SplitterDistance = (int)(measureSplit.Height * 0.55); }
-                    catch { }
-                }
-            };
+            // 分隔位置由 Form1.Layout + SplitterLayoutStore 统一处理
         }
 
         private void Form1_Load(object sender, EventArgs e)
