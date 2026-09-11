@@ -82,7 +82,7 @@ namespace 施工定额
             {
                 new() { FieldName = "名称", HeaderText = "名称", Width = 180, ReadOnly = false },
                 new() { FieldName = "金额", HeaderText = "金额", Width = 120, ReadOnly = false,
-                        Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                        Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
             });
             dataGridView_other.CellBeginEdit += dataGridView_other_CellBeginEdit;
             dataGridView_other.CellEndEdit += dataGridView_other_CellEndEdit;

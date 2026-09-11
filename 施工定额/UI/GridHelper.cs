@@ -124,12 +124,12 @@ namespace 施工定额.UI
             new() { FieldName = "项目特征",   HeaderText = "项目特征",   Width = 250, WrapMode = true, ReadOnly = false },
             new() { FieldName = "单位",       HeaderText = "单位",       Width = 60  },
             new() { FieldName = "工程量",     HeaderText = "工程量",     Width = 100,
-                    ReadOnly = false, Format = "N4",
+                    ReadOnly = false, Format = "0.####",
                     Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "综合单价",   HeaderText = "综合单价",   Width = 100,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "综合合价",   HeaderText = "综合合价",   Width = 120,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
         };
 
         public static List<ColumnConfig> MeasureQingdan => new List<ColumnConfig>
@@ -140,12 +140,12 @@ namespace 施工定额.UI
             new() { FieldName = "项目特征",     HeaderText = "项目特征",   Width = 250, WrapMode = true, ReadOnly = false },
             new() { FieldName = "单位",         HeaderText = "单位",       Width = 60  },
             new() { FieldName = "工程量",       HeaderText = "工程量",     Width = 100,
-                    ReadOnly = false, Format = "N4",
+                    ReadOnly = false, Format = "0.####",
                     Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "综合单价",     HeaderText = "综合单价",   Width = 100,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "综合合价",     HeaderText = "综合合价",   Width = 120,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
         };
 
         public static List<ColumnConfig> Dinge => new List<ColumnConfig>
@@ -155,15 +155,15 @@ namespace 施工定额.UI
             new() { FieldName = "定额名称",   HeaderText = "定额名称",   Width = 200, ReadOnly = false },
             new() { FieldName = "定额单位",   HeaderText = "单位",       Width = 60  },
             new() { FieldName = "换算系数",   HeaderText = "换算系数",   Width = 80,
-                    ReadOnly = false, Format = "N4",
+                    ReadOnly = false, Format = "0.####",
                     Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "定额工程量", HeaderText = "工程量",     Width = 100,
-                    ReadOnly = false, Format = "N4",
+                    ReadOnly = false, Format = "0.####",
                     Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "定额单价",   HeaderText = "单价",       Width = 100,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "定额合价",   HeaderText = "合价",       Width = 120,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
         };
 
         public static List<ColumnConfig> Xiaohaoliang => new List<ColumnConfig>
@@ -174,15 +174,15 @@ namespace 施工定额.UI
             new() { FieldName = "规格型号",   HeaderText = "规格",   Width = 100 },
             new() { FieldName = "消耗量单位", HeaderText = "单位",   Width = 60 },
             new() { FieldName = "含量",       HeaderText = "含量",   Width = 80,
-                    ReadOnly = false, Format = "N4",
+                    ReadOnly = false, Format = "0.####",
                     Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "数量",       HeaderText = "数量",   Width = 80,
-                    Format = "N4", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.####", Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "市场价",     HeaderText = "市场价", Width = 90,
-                    ReadOnly = false, Format = "N2",
+                    ReadOnly = false, Format = "0.##",
                     Alignment = DataGridViewContentAlignment.MiddleRight },
             new() { FieldName = "市场价合计", HeaderText = "合价",   Width = 100,
-                    Format = "N2", Alignment = DataGridViewContentAlignment.MiddleRight },
+                    Format = "0.##", Alignment = DataGridViewContentAlignment.MiddleRight },
         };
     }
 }
