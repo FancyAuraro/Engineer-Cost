@@ -17,6 +17,14 @@ namespace 施工定额.Helper
         public static ICostCalculationService CreateCostCalculationService(Entity.FeeRateSettings rates) =>
             new CostCalculationService(rates);
 
+        public static UnitProjectController CreateUnitProjectController()
+        {
+            var conn = AppConfig.UserDbConn;
+            return new UnitProjectController(
+                new UnitProjectRepository(conn),
+                new OtherProjectRepository(conn));
+        }
+
         public static IImportService CreateImportService() =>
             new ImportService(AppConfig.SystemDbConn, AppConfig.UserDbConn);
 

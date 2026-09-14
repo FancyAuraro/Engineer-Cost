@@ -156,5 +156,30 @@ namespace 施工定额.Tests
             Assert.Equal(30m, summary.其他项目合价);
             Assert.Equal(150m, summary.含税总价);
         }
+
+        [Fact]
+        public void CalculateProjectSummary_ExcludesStatutoryFromBillWhenConfigured()
+        {
+            var svc = CreateService(overheadRate: 0m, profitRate: 0m, statutory: 0.1m, vat: 0m, includeStatutory: false);
+            var qd = new Qingdan { 清单编码 = "Q1", 工程量 = 10m, 定额列表 = { SampleDinge(10m) } };
+            svc.RecalculateQingdan(qd);
+            var summary = svc.CalculateProjectSummary(new[] { qd });
+            Assert.Equal(3500m, summary.分部分项合价);
+            Assert.Equal(200m, summary.规费);
+            Assert.Equal(3700m, summary.不含税总价);
+            Assert.Equal(3700m, summary.含税总价);
+        }
+
+        [Fact]
+        public void CalculateProjectSummary_IncludesStatutoryInBillWhenConfigured()
+        {
+            var svc = CreateService(overheadRate: 0m, profitRate: 0m, statutory: 0.1m, vat: 0m, includeStatutory: true);
+            var qd = new Qingdan { 清单编码 = "Q1", 工程量 = 10m, 定额列表 = { SampleDinge(10m) } };
+            svc.RecalculateQingdan(qd);
+            var summary = svc.CalculateProjectSummary(new[] { qd });
+            Assert.Equal(3700m, summary.分部分项合价);
+            Assert.Equal(200m, summary.规费);
+            Assert.Equal(3700m, summary.不含税总价);
+        }
     }
 }
