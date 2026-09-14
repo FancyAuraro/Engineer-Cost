@@ -29,6 +29,8 @@ namespace 施工定额
                 SplitterLayoutStore.Attach(mainSplit);
                 SplitterLayoutStore.Attach(rightSplit);
                 SplitterLayoutStore.Attach(qingdanSplit);
+
+                var measureSplit = _uiSetup.MeasureSplit;
                 if (measureSplit != null)
                     SplitterLayoutStore.Attach(measureSplit);
 
