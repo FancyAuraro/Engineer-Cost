@@ -2,6 +2,7 @@ using System.ComponentModel;
 using 施工定额.Entity;
 using 施工定额.Export;
 using 施工定额.Helper;
+using 施工定额.UI;
 
 namespace 施工定额.Service
 {
@@ -46,27 +47,22 @@ namespace 施工定额.Service
         public void OpenImportFormFromGrid(DataGridView grid, int rowIndex)
         {
             if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return;
-
             string qingdanCode = grid.Rows[rowIndex].Cells["清单编码"].Value?.ToString() ?? "";
             if (string.IsNullOrEmpty(qingdanCode))
             {
                 ErrorHandler.ShowBusiness("当前选中的清单编码为空，无法打开定额库。");
                 return;
             }
-
             string category = grid.Name == "dataGridView_measure" ||
                 (grid.Tag is string tag && QingdanCategory.IsMeasure(tag))
                 ? QingdanCategory.措施项目
                 : QingdanCategory.分部分项;
-
             Form2 f2 = AppComposition.CreateImportForm(qingdanCode, category, _currentUnitProjectCode());
             f2.DataImported += () =>
             {
                 if (_owner.IsDisposed) return;
-                if (_owner.InvokeRequired)
-                    _owner.Invoke(new Action(_reloadAndRecalculate));
-                else
-                    _reloadAndRecalculate();
+                if (_owner.InvokeRequired) _owner.Invoke(new Action(_reloadAndRecalculate));
+                else _reloadAndRecalculate();
             };
             f2.Show();
         }
@@ -75,29 +71,23 @@ namespace 施工定额.Service
         {
             if (rowIndex < 0 || columnIndex < 0 || columnIndex >= grid.Columns.Count) return;
             if (grid.Columns[columnIndex].Name != "btnViewImage") return;
-
             string code = grid.Rows[rowIndex].Cells["清单编码"].Value?.ToString() ?? "";
             if (string.IsNullOrEmpty(code)) return;
-
             string imageFolder = Path.Combine(AppConfig.DataDirectory, "images", code);
-            if (!Directory.Exists(imageFolder))
-                imageFolder = Path.Combine(AppContext.BaseDirectory, code);
+            if (!Directory.Exists(imageFolder)) imageFolder = Path.Combine(AppContext.BaseDirectory, code);
             if (!Directory.Exists(imageFolder))
             {
                 ErrorHandler.ShowBusiness($"未找到图片文件夹：{imageFolder}");
                 return;
             }
-
             var supportedExt = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
             var imageFiles = Directory.GetFiles(imageFolder)
-                .Where(f => supportedExt.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                .ToList();
+                .Where(f => supportedExt.Contains(Path.GetExtension(f).ToLowerInvariant())).ToList();
             if (imageFiles.Count == 0)
             {
                 ErrorHandler.ShowBusiness("该清单文件夹下没有图片。");
                 return;
             }
-
             new ImageViewerForm(code, imageFiles).Show(_owner);
         }
 
@@ -110,7 +100,6 @@ namespace 施工定额.Service
             if (suppressGridEvents || e.RowIndex < 0 || e.ColumnIndex < 0) return;
             grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             if (e.RowIndex >= source.Count) return;
-
             var xhl = source[e.RowIndex];
             var colName = grid.Columns[e.ColumnIndex].Name;
             var cellValue = grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value;
@@ -128,10 +117,7 @@ namespace 施工定额.Service
                         break;
                 }
             }
-            catch (Exception ex)
-            {
-                ErrorHandler.Show(ex);
-            }
+            catch (Exception ex) { ErrorHandler.Show(ex); }
         }
 
         public void HandleDingeCellValueChanged(
@@ -144,27 +130,20 @@ namespace 施工定额.Service
             grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             var currentQd = _allQingdan.FirstOrDefault(q => q.清单编码 == _selection.SelectedQingdanCode);
             if (currentQd == null) return;
-
             _setSuppressGridEvents(true);
             try
             {
                 var colName = grid.Columns[e.ColumnIndex].Name;
                 var dg = binding.ElementAtOrDefault(e.RowIndex);
-                if (colName == "换算系数" && dg != null)
-                    _qingdanPresenter.OnDingeConversionFactorChanged(currentQd, dg);
-                else
-                    _qingdanPresenter.OnDingeChanged(currentQd);
+                if (colName == "换算系数" && dg != null) _qingdanPresenter.OnDingeConversionFactorChanged(currentQd, dg);
+                else _qingdanPresenter.OnDingeChanged(currentQd);
             }
-            catch (Exception ex)
-            {
-                ErrorHandler.Show(ex);
-            }
+            catch (Exception ex) { ErrorHandler.Show(ex); }
             finally
             {
                 _owner.BeginInvoke(new Action(() =>
                 {
-                    if (!_owner.IsDisposed)
-                        _setSuppressGridEvents(false);
+                    if (!_owner.IsDisposed) _setSuppressGridEvents(false);
                 }));
             }
         }
@@ -183,19 +162,13 @@ namespace 施工定额.Service
             DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || e.RowIndex >= list.Count || e.ColumnIndex < 0) return;
-
             var changedQd = list[e.RowIndex];
             try
             {
-                if (grid.Columns[e.ColumnIndex].Name == "工程量")
-                    _qingdanPresenter.OnQingdanWorkAmountChanged(changedQd);
-                else
-                    _qingdanPresenter.SaveQingdanFields(changedQd);
+                if (grid.Columns[e.ColumnIndex].Name == "工程量") _qingdanPresenter.OnQingdanWorkAmountChanged(changedQd);
+                else _qingdanPresenter.SaveQingdanFields(changedQd);
             }
-            catch (Exception ex)
-            {
-                ErrorHandler.Show(ex);
-            }
+            catch (Exception ex) { ErrorHandler.Show(ex); }
         }
     }
 }
