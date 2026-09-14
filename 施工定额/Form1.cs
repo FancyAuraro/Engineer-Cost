@@ -24,6 +24,7 @@ namespace 施工定额
         private readonly ContextMenuBuilder _menuBuilder;
         private readonly Form1DisplayCoordinator _displayCoordinator;
         private readonly Form1UiSetupCoordinator _uiSetup;
+        private readonly Form1GridCoordinator _gridCoordinator;
 
         private FeatureDataGridView? dataGridView_measure;
         private DataGridView? DataGridView_measure_dinge;
@@ -52,6 +53,14 @@ namespace 施工定额
                 _xhlBindingList,
                 () => CurrentUnitProjectCode,
                 code => _allQingdan.FirstOrDefault(q => q.清单编码 == code),
+                value => _suppressGridEvents = value);
+            _gridCoordinator = new Form1GridCoordinator(
+                this,
+                _qingdanPresenter,
+                _selection,
+                _allQingdan,
+                ReloadAndRecalculateEverything,
+                () => CurrentUnitProjectCode,
                 value => _suppressGridEvents = value);
             _menuBuilder = new ContextMenuBuilder(
                 _qingdanPresenter, _selection, ReloadAndRecalculateEverything,
