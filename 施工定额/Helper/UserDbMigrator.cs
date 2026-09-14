@@ -18,6 +18,7 @@ namespace 施工定额.Helper
             {
                 using var conn = new SqliteConnection($"Data Source={dbPath}");
                 conn.Open();
+                conn.ExecuteNonQuery("PRAGMA busy_timeout=5000;");
                 EnsureSchemaVersionTable(conn);
                 var version = ReadVersion(conn);
 
@@ -127,7 +128,6 @@ namespace 施工定额.Helper
                 "SELECT MIN(rowid) FROM [清单] " +
                 "WHERE [项目类别] = '其他项目' " +
                 "GROUP BY [清单编码]);";
-
             var removed = Execute(conn, tx, dedupe);
             if (removed > 0)
                 AppLogger.Info($"其他项目重复行已清理 {removed} 条");
@@ -160,8 +160,7 @@ namespace 施工定额.Helper
                 select.CommandText = "SELECT [金额] FROM [其他项目] WHERE [名称]=$n";
                 select.Parameters.AddWithValue("$n", name);
                 var value = select.ExecuteScalar();
-                if (value == null || value is DBNull)
-                    continue;
+                if (value == null || value is DBNull) continue;
 
                 var amount = code == "QT-ZGJ" ? 0m : Convert.ToDecimal(value);
                 using var update = conn.CreateCommand();
@@ -196,19 +195,17 @@ namespace 施工定额.Helper
         private static void EnsureUniqueXiaohaoliangIndex(SqliteConnection conn, SqliteTransaction tx)
         {
             const string uniqueName = "uidx_消耗量_定额ID_编码";
-            if (IndexExists(conn, tx, uniqueName))
-                return;
+            if (IndexExists(conn, tx, uniqueName)) return;
 
-            var removed = Execute(conn, tx,
-                "DELETE FROM [消耗量] " +
-                "WHERE rowid NOT IN (" +
-                "SELECT MIN(rowid) FROM [消耗量] " +
+            var duplicateCount = ExecuteScalarInt(conn, tx,
+                "SELECT COUNT(1) FROM (SELECT [定额ID], [消耗量编码] FROM [消耗量] " +
                 "WHERE [定额ID] IS NOT NULL AND [消耗量编码] IS NOT NULL " +
-                "GROUP BY [定额ID], [消耗量编码]) " +
-                "AND [定额ID] IS NOT NULL AND [消耗量编码] IS NOT NULL;");
-
-            if (removed > 0)
-                AppLogger.Info($"用户库消耗量去重删除 {removed} 行");
+                "GROUP BY [定额ID], [消耗量编码] HAVING COUNT(1) > 1)");
+            if (duplicateCount > 0)
+            {
+                throw new InvalidOperationException(
+                    $"用户库存在 {duplicateCount} 组重复消耗量记录，迁移已停止以避免自动删除用户数据。请先处理重复数据后重试。");
+            }
 
             if (IndexExists(conn, tx, "idx_消耗量_定额ID_编码"))
                 Execute(conn, tx, "DROP INDEX IF EXISTS [idx_消耗量_定额ID_编码]");
@@ -249,7 +246,6 @@ namespace 施工定额.Helper
                     return;
             }
             reader.Close();
-
             Execute(conn, tx,
                 $"ALTER TABLE {QuoteIdentifier(table)} ADD COLUMN {QuoteIdentifier(column)} {typeSql}");
             AppLogger.Info($"用户库已添加列 {table}.{column}");
@@ -257,9 +253,7 @@ namespace 施工定额.Helper
 
         private static void EnsureIndex(SqliteConnection conn, SqliteTransaction tx, string indexName, string createSql)
         {
-            if (IndexExists(conn, tx, indexName))
-                return;
-
+            if (IndexExists(conn, tx, indexName)) return;
             Execute(conn, tx, createSql);
             AppLogger.Info($"用户库已创建索引 {indexName}");
         }
@@ -282,6 +276,14 @@ namespace 施工定额.Helper
             return cmd.ExecuteScalar() != null;
         }
 
+        private static int ExecuteScalarInt(SqliteConnection conn, SqliteTransaction tx, string sql)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = sql;
+            return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+        }
+
         private static int Execute(SqliteConnection conn, SqliteTransaction? tx, string sql)
         {
             using var cmd = conn.CreateCommand();
@@ -290,9 +292,17 @@ namespace 施工定额.Helper
             return cmd.ExecuteNonQuery();
         }
 
-        private static string QuoteIdentifier(string value)
+        private static string QuoteIdentifier(string value) =>
+            "[" + value.Replace("]", "]]", StringComparison.Ordinal) + "]";
+    }
+
+    internal static class SqliteCommandExtensions
+    {
+        public static int ExecuteNonQuery(this SqliteConnection conn, string sql)
         {
-            return "[" + value.Replace("]", "]]", StringComparison.Ordinal) + "]";
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            return cmd.ExecuteNonQuery();
         }
     }
 }

@@ -7,6 +7,7 @@ namespace 施工定额.Helper
     public static class AppConfig
     {
         private static readonly IConfiguration _config;
+        private static readonly FeeRateSettingsStore _feeRateStore;
         private static FeeRateSettings? _feeRates;
 
         /// <summary>%AppData%\施工定额</summary>
@@ -23,6 +24,7 @@ namespace 施工定额.Helper
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
                 .Build();
+            _feeRateStore = new FeeRateSettingsStore(_config, DataDirectory);
 
             EnsureUserDatabase();
         }
@@ -39,85 +41,22 @@ namespace 施工定额.Helper
             {
                 if (_feeRates != null)
                     return _feeRates;
-                _feeRates = LoadFeeRates();
+                _feeRates = _feeRateStore.Load();
                 return _feeRates;
             }
         }
 
         public static FeeRateSettings ReloadFeeRates()
         {
-            _feeRates = LoadFeeRates();
+            _feeRates = _feeRateStore.Load();
             return _feeRates;
         }
 
-        /// <summary>
-        /// 将费率写入用户目录 fee_settings.json（不改程序目录 appsettings.json）。
-        /// </summary>
         public static void SaveUserFeeRates(FeeRateSettings rates)
         {
             if (rates == null) throw new ArgumentNullException(nameof(rates));
-            var path = Path.Combine(DataDirectory, "fee_settings.json");
-            var json = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                rates.OverheadBase,
-                rates.OverheadRate,
-                rates.ProfitRate,
-                rates.StatutoryFeeRate,
-                rates.VatRate,
-                rates.IncludeStatutoryInUnitPrice
-            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            _feeRateStore.Save(rates);
             _feeRates = rates;
-        }
-
-        private static FeeRateSettings LoadFeeRates()
-        {
-            var settings = new FeeRateSettings();
-            var section = _config.GetSection("FeeSettings");
-            if (section.Exists())
-            {
-                settings.OverheadBase = section["OverheadBase"] ?? settings.OverheadBase;
-                if (decimal.TryParse(section["OverheadRate"], out var overhead))
-                    settings.OverheadRate = overhead;
-                if (decimal.TryParse(section["ProfitRate"], out var profit))
-                    settings.ProfitRate = profit;
-                if (decimal.TryParse(section["StatutoryFeeRate"], out var statutory))
-                    settings.StatutoryFeeRate = statutory;
-                if (decimal.TryParse(section["VatRate"], out var vat))
-                    settings.VatRate = vat;
-                if (bool.TryParse(section["IncludeStatutoryInUnitPrice"], out var include))
-                    settings.IncludeStatutoryInUnitPrice = include;
-            }
-
-            try
-            {
-                var userPath = Path.Combine(DataDirectory, "fee_settings.json");
-                if (File.Exists(userPath))
-                {
-                    var json = File.ReadAllText(userPath);
-                    var doc = System.Text.Json.JsonDocument.Parse(json);
-                    var root = doc.RootElement;
-                    if (root.TryGetProperty("OverheadBase", out var ob) && ob.GetString() is string s && !string.IsNullOrEmpty(s))
-                        settings.OverheadBase = s;
-                    if (root.TryGetProperty("OverheadRate", out var ohr) && ohr.TryGetDecimal(out var ohv))
-                        settings.OverheadRate = ohv;
-                    if (root.TryGetProperty("ProfitRate", out var pr) && pr.TryGetDecimal(out var prv))
-                        settings.ProfitRate = prv;
-                    if (root.TryGetProperty("StatutoryFeeRate", out var sr) && sr.TryGetDecimal(out var srv))
-                        settings.StatutoryFeeRate = srv;
-                    if (root.TryGetProperty("VatRate", out var vr) && vr.TryGetDecimal(out var vrv))
-                        settings.VatRate = vrv;
-                    if (root.TryGetProperty("IncludeStatutoryInUnitPrice", out var ir) &&
-                        (ir.ValueKind == System.Text.Json.JsonValueKind.True || ir.ValueKind == System.Text.Json.JsonValueKind.False))
-                        settings.IncludeStatutoryInUnitPrice = ir.GetBoolean();
-                }
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Error("读取用户费率配置失败", ex);
-            }
-
-            return settings;
         }
 
         public static string SystemDbFilePath => ExtractDataSource(SystemDbConn);
@@ -151,8 +90,9 @@ namespace 施工定额.Helper
                     AppLogger.Info($"已创建空用户库表结构：{userPath}");
                 }
 
-                UserDbMigrator.Apply(userPath);
+                // 在迁移前保留快照；即使后续某个迁移失败，也能恢复到迁移前状态。
                 UserDbBackup.BackupIfNeeded(userPath);
+                UserDbMigrator.Apply(userPath);
             }
             catch (Exception ex)
             {
@@ -162,18 +102,12 @@ namespace 施工定额.Helper
 
         private static bool HasRequiredUserTables(string dbPath)
         {
-            if (!File.Exists(dbPath))
-                return false;
-
+            if (!File.Exists(dbPath)) return false;
             try
             {
-                if (new FileInfo(dbPath).Length < 100)
-                    return false;
+                if (new FileInfo(dbPath).Length < 100) return false;
             }
-            catch
-            {
-                return false;
-            }
+            catch { return false; }
 
             try
             {
@@ -182,13 +116,9 @@ namespace 施工定额.Helper
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText =
                     "SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name IN ('清单','定额_市政工程','消耗量')";
-                var count = Convert.ToInt32(cmd.ExecuteScalar());
-                return count >= 3;
+                return Convert.ToInt32(cmd.ExecuteScalar()) >= 3;
             }
-            catch
-            {
-                return false;
-            }
+            catch { return false; }
         }
 
         private static void CreateUserSchema(string dbPath)
@@ -215,17 +145,14 @@ CREATE TABLE IF NOT EXISTS ""清单"" (
 	""单位工程编码""	TEXT NOT NULL DEFAULT 'DW001',
 	PRIMARY KEY(""ID号"" AUTOINCREMENT)
 );
-
 CREATE TABLE IF NOT EXISTS ""单位工程"" (
 	""编码""	TEXT NOT NULL PRIMARY KEY,
 	""名称""	TEXT NOT NULL,
 	""排序""	INTEGER NOT NULL DEFAULT 0
 );
-
 INSERT INTO ""单位工程"" (""编码"", ""名称"", ""排序"")
 SELECT 'DW001', '默认单位工程', 0
 WHERE NOT EXISTS (SELECT 1 FROM ""单位工程"" WHERE ""编码"" = 'DW001');
-
 CREATE TABLE IF NOT EXISTS ""定额_市政工程"" (
 	""ID号""	TEXT NOT NULL UNIQUE,
 	""清单编码""	TEXT,
@@ -241,7 +168,6 @@ CREATE TABLE IF NOT EXISTS ""定额_市政工程"" (
 	""换算系数""	REAL NOT NULL DEFAULT 1,
 	""Level""	TEXT
 );
-
 CREATE TABLE IF NOT EXISTS ""消耗量"" (
 	""定额ID""	TEXT,
 	""清单编码""	TEXT,
@@ -257,7 +183,6 @@ CREATE TABLE IF NOT EXISTS ""消耗量"" (
 	""市场价合计""	REAL,
 	""规格型号""	TEXT
 );
-
 CREATE TABLE IF NOT EXISTS ""人材机"" (
 	""编码""	TEXT NOT NULL,
 	""类别""	TEXT,
@@ -265,8 +190,7 @@ CREATE TABLE IF NOT EXISTS ""人材机"" (
 	""规格型号""	TEXT,
 	""备注""	TEXT,
 	PRIMARY KEY(""编码"")
-);
-";
+);";
             cmd.ExecuteNonQuery();
         }
 
@@ -274,22 +198,15 @@ CREATE TABLE IF NOT EXISTS ""人材机"" (
         {
             var raw = _config.GetConnectionString(key)
                 ?? throw new InvalidOperationException($"配置文件中找不到连接字符串: {key}");
-
             var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = raw };
-
-            if (builder.ContainsKey("Version"))
-                builder.Remove("Version");
-
-            if (!builder.TryGetValue("Data Source", out var dsObj))
-                return builder.ConnectionString;
-
+            if (builder.ContainsKey("Version")) builder.Remove("Version");
+            if (!builder.TryGetValue("Data Source", out var dsObj)) return builder.ConnectionString;
             var dataSource = Environment.ExpandEnvironmentVariables(dsObj?.ToString() ?? "");
             if (Path.IsPathRooted(dataSource))
             {
                 builder["Data Source"] = dataSource;
                 return builder.ConnectionString;
             }
-
             var baseDir = preferAppData ? DataDirectory : AppContext.BaseDirectory;
             builder["Data Source"] = Path.Combine(baseDir, dataSource);
             return builder.ConnectionString;
