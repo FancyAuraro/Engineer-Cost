@@ -28,6 +28,7 @@ namespace 施工定额.Service
 
         public FeatureDataGridView? MeasureQingdanGrid { get; private set; }
         public DataGridView? MeasureDingeGrid { get; private set; }
+        public SplitContainer? MeasureSplit { get; private set; }
 
         public Form1UiSetupCoordinator(
             TabControl tabControl,
@@ -68,8 +69,10 @@ namespace 施工定额.Service
             var existing = _tabControl.TabPages.Cast<TabPage>().FirstOrDefault(t => t.Name == "tabPage措施");
             if (existing != null)
             {
-                MeasureQingdanGrid = existing.Controls.OfType<SplitContainer>().FirstOrDefault()?.Panel1.Controls.OfType<FeatureDataGridView>().FirstOrDefault();
-                MeasureDingeGrid = existing.Controls.OfType<SplitContainer>().FirstOrDefault()?.Panel2.Controls.OfType<DataGridView>().FirstOrDefault();
+                var existingSplit = existing.Controls.OfType<SplitContainer>().FirstOrDefault();
+                MeasureSplit = existingSplit;
+                MeasureQingdanGrid = existingSplit?.Panel1.Controls.OfType<FeatureDataGridView>().FirstOrDefault();
+                MeasureDingeGrid = existingSplit?.Panel2.Controls.OfType<DataGridView>().FirstOrDefault();
                 return;
             }
 
@@ -122,6 +125,7 @@ namespace 施工定额.Service
                 }
             }
             _tabControl.TabPages.Insert(insertAt, tab);
+            MeasureSplit = split;
             MeasureQingdanGrid = measureQingdan;
             MeasureDingeGrid = measureDinge;
         }
