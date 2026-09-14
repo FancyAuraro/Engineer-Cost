@@ -20,11 +20,11 @@ namespace 施工定额.Service
         private readonly BindingList<Dinge> _measureDingeList;
         private readonly BindingList<Xiaohaoliang> _xiaohaoliangList;
         private readonly ContextMenuBuilder _menuBuilder;
-        private readonly Action<DataGridViewCellEventHandler> _wireMeasureQingdanClick;
-        private readonly Action<DataGridViewCellEventHandler> _wireMeasureQingdanDoubleClick;
-        private readonly Action<DataGridViewCellEventHandler> _wireMeasureQingdanEndEdit;
-        private readonly Action<DataGridViewCellEventHandler> _wireMeasureDingeClick;
-        private readonly Action<DataGridViewCellEventHandler> _wireMeasureDingeChanged;
+        private readonly DataGridViewCellEventHandler _measureQingdanClick;
+        private readonly DataGridViewCellEventHandler _measureQingdanDoubleClick;
+        private readonly DataGridViewCellEventHandler _measureQingdanEndEdit;
+        private readonly DataGridViewCellEventHandler _measureDingeClick;
+        private readonly DataGridViewCellEventHandler _measureDingeChanged;
 
         public FeatureDataGridView? MeasureQingdanGrid { get; private set; }
         public DataGridView? MeasureDingeGrid { get; private set; }
@@ -40,11 +40,11 @@ namespace 施工定额.Service
             BindingList<Dinge> measureDingeList,
             BindingList<Xiaohaoliang> xiaohaoliangList,
             ContextMenuBuilder menuBuilder,
-            Action<DataGridViewCellEventHandler> wireMeasureQingdanClick,
-            Action<DataGridViewCellEventHandler> wireMeasureQingdanDoubleClick,
-            Action<DataGridViewCellEventHandler> wireMeasureQingdanEndEdit,
-            Action<DataGridViewCellEventHandler> wireMeasureDingeClick,
-            Action<DataGridViewCellEventHandler> wireMeasureDingeChanged)
+            DataGridViewCellEventHandler measureQingdanClick,
+            DataGridViewCellEventHandler measureQingdanDoubleClick,
+            DataGridViewCellEventHandler measureQingdanEndEdit,
+            DataGridViewCellEventHandler measureDingeClick,
+            DataGridViewCellEventHandler measureDingeChanged)
         {
             _tabControl = tabControl;
             _qingdanGrid = qingdanGrid;
@@ -56,18 +56,20 @@ namespace 施工定额.Service
             _measureDingeList = measureDingeList;
             _xiaohaoliangList = xiaohaoliangList;
             _menuBuilder = menuBuilder;
-            _wireMeasureQingdanClick = wireMeasureQingdanClick;
-            _wireMeasureQingdanDoubleClick = wireMeasureQingdanDoubleClick;
-            _wireMeasureQingdanEndEdit = wireMeasureQingdanEndEdit;
-            _wireMeasureDingeClick = wireMeasureDingeClick;
-            _wireMeasureDingeChanged = wireMeasureDingeChanged;
+            _measureQingdanClick = measureQingdanClick;
+            _measureQingdanDoubleClick = measureQingdanDoubleClick;
+            _measureQingdanEndEdit = measureQingdanEndEdit;
+            _measureDingeClick = measureDingeClick;
+            _measureDingeChanged = measureDingeChanged;
         }
 
         public void EnsureMeasureTab()
         {
-            if (_tabControl.TabPages.Cast<TabPage>().Any(t => t.Name == "tabPage措施"))
+            var existing = _tabControl.TabPages.Cast<TabPage>().FirstOrDefault(t => t.Name == "tabPage措施");
+            if (existing != null)
             {
-                MeasureQingdanGrid = _tabControl.Controls.OfType<FeatureDataGridView>().FirstOrDefault();
+                MeasureQingdanGrid = existing.Controls.OfType<SplitContainer>().FirstOrDefault()?.Panel1.Controls.OfType<FeatureDataGridView>().FirstOrDefault();
+                MeasureDingeGrid = existing.Controls.OfType<SplitContainer>().FirstOrDefault()?.Panel2.Controls.OfType<DataGridView>().FirstOrDefault();
                 return;
             }
 
@@ -100,11 +102,11 @@ namespace 施工定额.Service
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
             };
 
-            measureQingdan.CellClick += (s, e) => _wireMeasureQingdanClick(h => { });
-            measureQingdan.CellDoubleClick += (s, e) => _wireMeasureQingdanDoubleClick(h => { });
-            measureQingdan.CellEndEdit += (s, e) => _wireMeasureQingdanEndEdit(h => { });
-            measureDinge.CellClick += (s, e) => _wireMeasureDingeClick(h => { });
-            measureDinge.CellValueChanged += (s, e) => _wireMeasureDingeChanged(h => { });
+            measureQingdan.CellClick += _measureQingdanClick;
+            measureQingdan.CellDoubleClick += _measureQingdanDoubleClick;
+            measureQingdan.CellEndEdit += _measureQingdanEndEdit;
+            measureDinge.CellClick += _measureDingeClick;
+            measureDinge.CellValueChanged += _measureDingeChanged;
 
             split.Panel1.Controls.Add(measureQingdan);
             split.Panel2.Controls.Add(measureDinge);
@@ -127,11 +129,14 @@ namespace 施工定额.Service
         public void InitializeGridColumns()
         {
             GridManager.BindOnce(_qingdanGrid, _qingdanList, GridColumns.Qingdan);
-            _qingdanGrid.Columns.Add(new DataGridViewButtonColumn
+            if (!_qingdanGrid.Columns.Contains("btnViewImage"))
             {
-                Name = "btnViewImage", HeaderText = "图片", Text = "查看",
-                UseColumnTextForButtonValue = true, Width = 60
-            });
+                _qingdanGrid.Columns.Add(new DataGridViewButtonColumn
+                {
+                    Name = "btnViewImage", HeaderText = "图片", Text = "查看",
+                    UseColumnTextForButtonValue = true, Width = 60
+                });
+            }
             GridLayoutStore.Attach(_qingdanGrid);
             GridManager.BindOnce(_dingeGrid, _dingeList, GridColumns.Dinge);
             GridManager.BindOnce(_xiaohaoliangGrid, _xiaohaoliangList, GridColumns.Xiaohaoliang);
