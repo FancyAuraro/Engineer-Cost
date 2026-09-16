@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using 施工定额.Entity;
-using 施工定额.Export;
 using 施工定额.Helper;
 using 施工定额.Service;
 using 施工定额.UI;
@@ -25,15 +24,15 @@ namespace 施工定额
         private readonly Form1DisplayCoordinator _displayCoordinator;
         private readonly Form1UiSetupCoordinator _uiSetup;
         private readonly Form1GridCoordinator _gridCoordinator;
+        private readonly Form1MenuCoordinator _menuCoordinator;
+        private readonly OtherProjectCoordinator _otherProjectCoordinator;
 
         private FeatureDataGridView? dataGridView_measure;
         private DataGridView? DataGridView_measure_dinge;
         private bool _suppressGridEvents;
 
         public Form1()
-            : this(AppComposition.CreateQingdanRepository(), AppComposition.CreateCostCalculationService())
-        {
-        }
+            : this(AppComposition.CreateQingdanRepository(), AppComposition.CreateCostCalculationService()) { }
 
         public Form1(IQingdanRepository repo, ICostCalculationService calcService)
         {
@@ -45,42 +44,34 @@ namespace 施工定额
             _qingdanPresenter = new QingdanPresenter(_repo, _calcService, _allQingdan, UpdateDisplay);
             _summaryPresenter = new SummaryPresenter(_allQingdan, _calcService);
             _displayCoordinator = new Form1DisplayCoordinator(
-                _allQingdan,
-                myMemoryQingdanBindingList,
-                _measureQingdanList,
-                _dingeBindingList,
-                _measureDingeBindingList,
-                _xhlBindingList,
+                _allQingdan, myMemoryQingdanBindingList, _measureQingdanList,
+                _dingeBindingList, _measureDingeBindingList, _xhlBindingList,
                 () => CurrentUnitProjectCode,
                 code => _allQingdan.FirstOrDefault(q => q.清单编码 == code),
                 value => _suppressGridEvents = value);
             _gridCoordinator = new Form1GridCoordinator(
-                this,
-                _qingdanPresenter,
-                _selection,
-                _allQingdan,
-                ReloadAndRecalculateEverything,
-                () => CurrentUnitProjectCode,
+                this, _qingdanPresenter, _selection, _allQingdan,
+                ReloadAndRecalculateEverything, () => CurrentUnitProjectCode,
                 value => _suppressGridEvents = value);
             _menuBuilder = new ContextMenuBuilder(
                 _qingdanPresenter, _selection, ReloadAndRecalculateEverything,
                 () => CurrentUnitProjectCode);
             _uiSetup = new Form1UiSetupCoordinator(
-                tabControl1,
-                dataGridView1,
-                DataGridView_dinge,
-                dataGridView2,
-                myMemoryQingdanBindingList,
-                _measureQingdanList,
-                _dingeBindingList,
-                _measureDingeBindingList,
-                _xhlBindingList,
-                _menuBuilder,
-                dataGridView_measure_CellClick,
-                dataGridView_measure_CellDoubleClick,
-                dataGridView_measure_CellEndEdit,
-                DataGridView_measure_dinge_CellClick,
+                tabControl1, dataGridView1, DataGridView_dinge, dataGridView2,
+                myMemoryQingdanBindingList, _measureQingdanList, _dingeBindingList,
+                _measureDingeBindingList, _xhlBindingList, _menuBuilder,
+                dataGridView_measure_CellClick, dataGridView_measure_CellDoubleClick,
+                dataGridView_measure_CellEndEdit, DataGridView_measure_dinge_CellClick,
                 DataGridView_measure_dinge_CellValueChanged);
+            _menuCoordinator = new Form1MenuCoordinator(
+                this, menuStrip1, toolStrip1, _allQingdan, _qingdanPresenter,
+                _summaryPresenter, ReloadAndRecalculateEverything,
+                () => CurrentUnitProjectCode, () => _calcService,
+                service => _calcService = service);
+            _otherProjectCoordinator = new OtherProjectCoordinator(
+                this, tabControl1, _allQingdan, () => CurrentUnitProjectCode,
+                RefreshSummaryForCurrentUnit,
+                new OtherProjectRepository(AppConfig.UserDbConn));
 
             ApplyUiFont();
             ApplyResponsiveLayout();
@@ -95,9 +86,7 @@ namespace 施工定额
             _selection.QingdanSelectionChanged += OnQingdanSelectionChanged;
             _selection.DingeSelectionChanged += OnDingeSelectionChanged;
 
-            EnsureSettingsMenu();
-            EnsureHelpMenu();
-            WirePlaceholderMenus();
+            _menuCoordinator.EnsureMenus();
             UiTheme.ApplyToolStrip(menuStrip1);
             EnsureUnitProjectsInitialized();
         }
@@ -122,10 +111,7 @@ namespace 施工定额
         }
 
         public void UpdateDisplay(DisplayType type) =>
-            _displayCoordinator.UpdateDisplay(
-                type,
-                _selection.SelectedQingdanCode,
-                _selection.SelectedDingeCode,
-                _selection.SelectedDingeID);
+            _displayCoordinator.UpdateDisplay(type, _selection.SelectedQingdanCode,
+                _selection.SelectedDingeCode, _selection.SelectedDingeID);
     }
 }
