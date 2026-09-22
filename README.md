@@ -59,3 +59,5 @@ dotnet run --project 施工定额
 ## License
 
 个人学习用途。
+<img width="1247" height="860" alt="image" src="https://github.com/user-attachments/assets/abb351e0-15ff-4a19-9b8e-96e9560a1171" />
+
